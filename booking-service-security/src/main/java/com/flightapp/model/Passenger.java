@@ -16,17 +16,17 @@ public class Passenger {
 	private String id;
 
 	@NotBlank(message = "Passenger name cannot be blank")
-    private String name;
+	private String name;
 
-    @NotBlank(message = "Passenger gender cannot be blank")
-    private String gender;
+	@NotBlank(message = "Passenger gender cannot be blank")
+	private String gender;
 
-    @NotNull(message = "Passenger age cannot be null")
-    @Min(value = 1, message = "Passenger age must be at least 1")
-    private Integer age;
+	@NotNull(message = "Passenger age cannot be null")
+	@Min(value = 1, message = "Passenger age must be at least 1")
+	private Integer age;
 
-    @NotBlank(message = "Seat number cannot be blank")
-    private String seatNumber;
+	@NotBlank(message = "Seat number cannot be blank")
+	private String seatNumber;
 
 	private String mealPreference;
 
