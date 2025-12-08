@@ -23,20 +23,20 @@ public class Ticket {
 	private String pnr;
 
 	@NotBlank(message = "User email cannot be blank")
-    private String userEmail;
+	private String userEmail;
 
-    @NotBlank(message = "Departure flight ID cannot be blank")
-    private String departureFlightId;
+	@NotBlank(message = "Departure flight ID cannot be blank")
+	private String departureFlightId;
 
 	private String returnFlightId;
 
 	@NotNull(message = "Trip type must be provided")
-    private FLIGHTTYPE tripType;
+	private FLIGHTTYPE tripType;
 
-    @NotNull(message = "Booking time cannot be null")
-    private LocalDateTime bookingTime;
+	@NotNull(message = "Booking time cannot be null")
+	private LocalDateTime bookingTime;
 
-    private String seatsBooked;
+	private String seatsBooked;
 
 	private String mealType;
 
