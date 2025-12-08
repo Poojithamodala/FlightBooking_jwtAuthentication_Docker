@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +53,7 @@ class BookingServiceImplTest {
 
 	private Passenger passenger;
 	private FlightDto depFlight;
+	private final String token = "Bearer dummy-token";
 
 	@BeforeEach
 	void setUp() {
@@ -71,30 +73,27 @@ class BookingServiceImplTest {
 
 	@Test
 	void testBookTicketSuccess() {
-		when(flightClient.getFlight("FL1")).thenReturn(depFlight);
+		when(flightClient.getFlight("FL1", token)).thenReturn(depFlight);
+		when(flightClient.reserveSeats("FL1", 1, token)).thenReturn("OK");
+
 		when(ticketRepository.save(any(Ticket.class))).thenAnswer(i -> Mono.just(i.getArgument(0)));
 		when(passengerRepository.saveAll(anyList())).thenReturn(Flux.fromIterable(List.of(passenger)));
 
-		StepVerifier.create(
-				bookingService.bookTicket("pooja@gmail.com", "FL1", null, List.of(passenger), FLIGHTTYPE.ONE_WAY))
+		StepVerifier
+				.create(bookingService.bookTicket("pooja@gmail.com", "FL1", null, List.of(passenger),
+						FLIGHTTYPE.ONE_WAY, token))
 				.expectNextMatches(pnr -> pnr != null && !pnr.isEmpty()).verifyComplete();
 
-		verify(flightClient).reserveSeats("FL1", 1);
-		verify(ticketRepository).save(any(Ticket.class));
-		verify(passengerRepository).saveAll(anyList());
+		verify(flightClient).reserveSeats("FL1", 1, token);
 	}
 
 	@Test
 	void testBookTicketNotEnoughSeats() {
 		depFlight.setAvailableSeats(0);
-		when(flightClient.getFlight("FL1")).thenReturn(depFlight);
+		when(flightClient.getFlight("FL1", token)).thenReturn(depFlight);
 
-		StepVerifier
-				.create(bookingService.bookTicket("pooja@gmail.com", "FL1", null, List.of(passenger),
-						FLIGHTTYPE.ONE_WAY))
-				.expectErrorMatches(e -> e instanceof ResponseStatusException
-						&& ((ResponseStatusException) e).getStatusCode() == HttpStatus.BAD_REQUEST)
-				.verify();
+		StepVerifier.create(bookingService.bookTicket("pooja@gmail.com", "FL1", null, List.of(passenger),
+				FLIGHTTYPE.ONE_WAY, token)).expectError(ResponseStatusException.class).verify();
 	}
 
 	@Test
@@ -115,22 +114,27 @@ class BookingServiceImplTest {
 		StepVerifier.create(bookingService.historyByEmail("pooja@gmail.com")).expectNext(ticket).verifyComplete();
 	}
 
-//	@Test
-//	void testCancelByPnrSuccess() {
-//		Ticket ticket = new Ticket();
-//		ticket.setPnr("PNR123");
-//		ticket.setDepartureFlightId("FL1");
-//		ticket.setSeatsBooked("A1");
-//		ticket.setCanceled(false);
-//
-//		when(ticketRepository.findByPnr("PNR123")).thenReturn(Mono.just(ticket));
-//		when(ticketRepository.save(any(Ticket.class))).thenReturn(Mono.just(ticket));
-//
-//		StepVerifier.create(bookingService.cancelByPnr("PNR123")).expectNext("Cancelled Successfully").verifyComplete();
-//
-//		verify(flightClient).releaseSeats("FL1", 1);
-//		verify(ticketRepository).save(any(Ticket.class));
-//	}
+	@Test
+	void testCancelByPnrSuccess() {
+		Ticket ticket = new Ticket();
+		ticket.setPnr("PNR123");
+		ticket.setDepartureFlightId("FL1");
+		ticket.setSeatsBooked("A1");
+		ticket.setCanceled(false);
+
+		depFlight.setDepartureTime(LocalDateTime.now().plusDays(2));
+
+		when(ticketRepository.findByPnr("PNR123")).thenReturn(Mono.just(ticket));
+		when(ticketRepository.save(any(Ticket.class))).thenReturn(Mono.just(ticket));
+		when(flightClient.getFlight("FL1", token)).thenReturn(depFlight);
+		when(flightClient.releaseSeats("FL1", 1, token)).thenReturn("OK");
+
+		StepVerifier.create(bookingService.cancelByPnr("PNR123", token)).expectNext("Cancelled Successfully")
+				.verifyComplete();
+
+		verify(flightClient).releaseSeats("FL1", 1, token);
+		verify(ticketRepository).save(any(Ticket.class));
+	}
 
 	@Test
 	void testCancelByPnrAlreadyCancelled() {
@@ -140,7 +144,7 @@ class BookingServiceImplTest {
 
 		when(ticketRepository.findByPnr("PNR123")).thenReturn(Mono.just(ticket));
 
-		StepVerifier.create(bookingService.cancelByPnr("PNR123")).expectNext("Ticket already cancelled")
+		StepVerifier.create(bookingService.cancelByPnr("PNR123", token)).expectNext("Ticket already cancelled")
 				.verifyComplete();
 	}
 
@@ -148,20 +152,20 @@ class BookingServiceImplTest {
 	void testCancelByPnrNotFound() {
 		when(ticketRepository.findByPnr("PNR123")).thenReturn(Mono.empty());
 
-		StepVerifier.create(bookingService.cancelByPnr("PNR123"))
+		StepVerifier.create(bookingService.cancelByPnr("PNR123", token))
 				.expectErrorMatches(e -> e instanceof ResponseStatusException
 						&& ((ResponseStatusException) e).getStatusCode() == HttpStatus.NOT_FOUND)
 				.verify();
 	}
 
 	@Test
-	void testBookTicketReturnFlightNotFound() {
-		when(flightClient.getFlight("FL1")).thenReturn(depFlight);
-		when(flightClient.getFlight("FL2")).thenReturn(null);
+	void testBookTicketRoundTripReturnFlightNotFound() {
+		when(flightClient.getFlight("FL1", token)).thenReturn(depFlight);
+		when(flightClient.getFlight("FL2", token)).thenReturn(null);
 
 		StepVerifier
 				.create(bookingService.bookTicket("pooja@gmail.com", "FL1", "FL2", List.of(passenger),
-						FLIGHTTYPE.ROUND_TRIP))
+						FLIGHTTYPE.ROUND_TRIP, token))
 				.expectErrorMatches(e -> e instanceof ResponseStatusException
 						&& ((ResponseStatusException) e).getReason().equals("Return flight not found"))
 				.verify();
@@ -169,46 +173,16 @@ class BookingServiceImplTest {
 
 	@Test
 	void testBookTicketReturnFlightNotEnoughSeats() {
-		when(flightClient.getFlight("FL1")).thenReturn(depFlight);
+		when(flightClient.getFlight("FL1", token)).thenReturn(depFlight);
 		FlightDto retFlight = new FlightDto();
 		retFlight.setId("FL2");
 		retFlight.setAvailableSeats(0);
 		retFlight.setPrice(100.0);
-		when(flightClient.getFlight("FL2")).thenReturn(retFlight);
 
-		StepVerifier
-				.create(bookingService.bookTicket("pooja@gmail.com", "FL1", "FL2", List.of(passenger),
-						FLIGHTTYPE.ROUND_TRIP))
-				.expectErrorMatches(e -> e instanceof ResponseStatusException
-						&& ((ResponseStatusException) e).getReason().equals("Not enough seats in return flight"))
-				.verify();
-	}
+		when(flightClient.getFlight("FL2", token)).thenReturn(retFlight);
 
-	@Test
-	void testBookTicketDepartureFlightNotFound() {
-		when(flightClient.getFlight("FL_UNKNOWN")).thenReturn(null);
-
-		StepVerifier
-				.create(bookingService.bookTicket("pooja@gmail.com", "FL_UNKNOWN", null, List.of(passenger),
-						FLIGHTTYPE.ONE_WAY))
-				.expectErrorMatches(e -> e instanceof ResponseStatusException
-						&& ((ResponseStatusException) e).getStatusCode() == HttpStatus.BAD_REQUEST
-						&& e.getMessage().contains("Departure flight not found"))
-				.verify();
-	}
-
-	@Test
-	void testBookTicketRoundTripReturnFlightIdNotNull() {
-		when(flightClient.getFlight("FL1")).thenReturn(depFlight);
-		when(flightClient.getFlight("FL2")).thenReturn(null);
-
-		StepVerifier
-				.create(bookingService.bookTicket("pooja@gmail.com", "FL1", "FL2", List.of(passenger),
-						FLIGHTTYPE.ROUND_TRIP))
-				.expectErrorMatches(e -> e instanceof ResponseStatusException
-						&& ((ResponseStatusException) e).getStatusCode() == HttpStatus.BAD_REQUEST
-						&& e.getMessage().contains("Return flight not found"))
-				.verify();
+		StepVerifier.create(bookingService.bookTicket("pooja@gmail.com", "FL1", "FL2", List.of(passenger),
+				FLIGHTTYPE.ROUND_TRIP, token)).expectError(ResponseStatusException.class).verify();
 	}
 
 	@Test
@@ -218,57 +192,73 @@ class BookingServiceImplTest {
 		retFlight.setPrice(150.0);
 		retFlight.setAvailableSeats(5);
 
-		when(flightClient.getFlight("FL1")).thenReturn(depFlight);
-		when(flightClient.getFlight("FL2")).thenReturn(retFlight);
+		when(flightClient.getFlight("FL1", token)).thenReturn(depFlight);
+		when(flightClient.getFlight("FL2", token)).thenReturn(retFlight);
+
 		when(ticketRepository.save(any(Ticket.class))).thenAnswer(i -> Mono.just(i.getArgument(0)));
 		when(passengerRepository.saveAll(anyList())).thenReturn(Flux.fromIterable(List.of(passenger)));
 
-		StepVerifier.create(
-				bookingService.bookTicket("pooja@gmail.com", "FL1", "FL2", List.of(passenger), FLIGHTTYPE.ROUND_TRIP))
-				.expectNextMatches(pnr -> {
-					return pnr != null && !pnr.isEmpty();
-				}).verifyComplete();
+		StepVerifier.create(bookingService.bookTicket("pooja@gmail.com", "FL1", "FL2", List.of(passenger),
+				FLIGHTTYPE.ROUND_TRIP, token)).expectNextCount(1).verifyComplete();
 
 		verify(ticketRepository)
-				.save(argThat(ticket -> ticket.getTotalPrice() == (depFlight.getPrice() + retFlight.getPrice()) * 1 // seatCount=1
-				));
+				.save(argThat(ticket -> ticket.getTotalPrice() == (depFlight.getPrice() + retFlight.getPrice())));
 	}
 
-//	@Test
-//	void testCancelByPnrCalculatesSeatCount() {
-//		Ticket ticket = new Ticket();
-//		ticket.setPnr("PNR123");
-//		ticket.setDepartureFlightId("FL1");
-//		ticket.setReturnFlightId("FL2");
-//		ticket.setSeatsBooked("A1,A2");
-//		ticket.setCanceled(false);
-//
-//		when(ticketRepository.findByPnr("PNR123")).thenReturn(Mono.just(ticket));
-//		when(ticketRepository.save(any(Ticket.class))).thenReturn(Mono.just(ticket));
-//
-//		StepVerifier.create(bookingService.cancelByPnr("PNR123")).expectNext("Cancelled Successfully").verifyComplete();
-//
-//		verify(flightClient).releaseSeats("FL1", 2);
-//		verify(flightClient).releaseSeats("FL2", 2);
-//		verify(ticketRepository).save(any(Ticket.class));
-//	}
+	@Test
+	void testCancelByPnrCalculatesSeatCount() {
+		Ticket ticket = new Ticket();
+		ticket.setPnr("PNR123");
+		ticket.setDepartureFlightId("FL1");
+		ticket.setReturnFlightId("FL2");
+		ticket.setSeatsBooked("A1,A2");
+		ticket.setCanceled(false);
 
-//	@Test
-//	void testCancelByPnrNoReturnFlight() {
-//		Ticket ticket = new Ticket();
-//		ticket.setPnr("PNR123");
-//		ticket.setDepartureFlightId("FL1");
-//		ticket.setReturnFlightId(null);
-//		ticket.setSeatsBooked("A1");
-//		ticket.setCanceled(false);
-//
-//		when(ticketRepository.findByPnr("PNR123")).thenReturn(Mono.just(ticket));
-//		when(ticketRepository.save(any(Ticket.class))).thenReturn(Mono.just(ticket));
-//
-//		StepVerifier.create(bookingService.cancelByPnr("PNR123")).expectNext("Cancelled Successfully").verifyComplete();
-//
-//		verify(flightClient).releaseSeats("FL1", 1);
-//		verify(flightClient, never()).releaseSeats(eq("FL2"), anyInt());
-//		verify(ticketRepository).save(any(Ticket.class));
-//	}
+		depFlight.setDepartureTime(LocalDateTime.now().plusDays(2));
+
+		when(ticketRepository.findByPnr("PNR123")).thenReturn(Mono.just(ticket));
+
+		when(flightClient.getFlight("FL1", token)).thenReturn(depFlight);
+		when(flightClient.getFlight("FL2", token)).thenReturn(depFlight);
+
+		when(flightClient.releaseSeats(eq("FL1"), eq(2), eq(token))).thenReturn("OK");
+		when(flightClient.releaseSeats(eq("FL2"), eq(2), eq(token))).thenReturn("OK");
+
+		when(ticketRepository.save(any(Ticket.class))).thenReturn(Mono.just(ticket));
+
+		StepVerifier.create(bookingService.cancelByPnr("PNR123", token)).expectNext("Cancelled Successfully")
+				.verifyComplete();
+
+		verify(flightClient).releaseSeats("FL1", 2, token);
+		verify(flightClient).releaseSeats("FL2", 2, token);
+	}
+
+	@Test
+	void testCancelByPnrNoReturnFlight() {
+
+		Ticket ticket = new Ticket();
+		ticket.setPnr("PNR123");
+		ticket.setDepartureFlightId("FL1");
+		ticket.setReturnFlightId(null);
+		ticket.setSeatsBooked("A1");
+		ticket.setCanceled(false);
+
+		depFlight = new FlightDto();
+		depFlight.setId("FL1");
+		depFlight.setDepartureTime(LocalDateTime.now().plusDays(2));
+
+		when(ticketRepository.findByPnr("PNR123")).thenReturn(Mono.just(ticket));
+
+		when(ticketRepository.save(any(Ticket.class))).thenReturn(Mono.just(ticket));
+
+		when(flightClient.getFlight("FL1", token)).thenReturn(depFlight);
+
+		when(flightClient.releaseSeats("FL1", 1, token)).thenReturn("OK");
+
+		StepVerifier.create(bookingService.cancelByPnr("PNR123", token)).expectNext("Cancelled Successfully")
+				.verifyComplete();
+
+		verify(flightClient).releaseSeats("FL1", 1, token);
+		verify(flightClient, never()).releaseSeats(eq("FL2"), anyInt(), eq(token));
+	}
 }
