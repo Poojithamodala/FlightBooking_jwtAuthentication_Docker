@@ -18,26 +18,20 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 @EnableWebFluxSecurity
 public class SecurityConfig {
 
-    @Bean
-    public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
-        return http
-                .csrf(ServerHttpSecurity.CsrfSpec::disable)
-                .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers("/actuator/**").permitAll()
-                        .pathMatchers("/api/flight/booking/**").authenticated()
-                        .pathMatchers("/api/flight/ticket/**").authenticated()
-                        .pathMatchers("/api/flight/history/**").authenticated()
-                        .anyExchange().authenticated()
-                )
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt())
-                .build();
-    }
+	@Bean
+	public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
+		return http.csrf(ServerHttpSecurity.CsrfSpec::disable)
+				.authorizeExchange(exchanges -> exchanges.pathMatchers("/actuator/**").permitAll()
+						.pathMatchers("/api/flight/booking/**").authenticated().pathMatchers("/api/flight/ticket/**")
+						.authenticated().pathMatchers("/api/flight/history/**").authenticated().anyExchange()
+						.authenticated())
+				.oauth2ResourceServer(oauth2 -> oauth2.jwt()).build();
+	}
 
-    @Bean
-    public ReactiveJwtDecoder reactiveJwtDecoder(
-            @Value("${spring.security.oauth2.resourceserver.jwt.secret}") String secret
-    ) {
-        SecretKey key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        return NimbusReactiveJwtDecoder.withSecretKey(key).build();
-    }
+	@Bean
+	public ReactiveJwtDecoder reactiveJwtDecoder(
+			@Value("${spring.security.oauth2.resourceserver.jwt.secret}") String secret) {
+		SecretKey key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+		return NimbusReactiveJwtDecoder.withSecretKey(key).build();
+	}
 }
