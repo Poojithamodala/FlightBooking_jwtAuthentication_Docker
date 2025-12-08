@@ -51,38 +51,32 @@ public class AuthServiceImpl implements AuthService {
 
 	@Override
 	public Mono<JwtResponse> login(LoginRequest request) {
-	    if (request.getUsername() == null || request.getPassword() == null) {
-	        return Mono.error(new RuntimeException("Username and password must not be null"));
-	    }
+		if (request.getUsername() == null || request.getPassword() == null) {
+			return Mono.error(new RuntimeException("Username and password must not be null"));
+		}
 
-	    return userRepository.findByUsername(request.getUsername())
-	        .switchIfEmpty(Mono.error(new RuntimeException("User not found")))
-	        .flatMap(user -> {
-	            if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-	                return Mono.error(new RuntimeException("Invalid password"));
-	            }
-	            if (secret == null || secret.isEmpty()) {
-	                return Mono.error(new RuntimeException("JWT secret is not configured"));
-	            }
+		return userRepository.findByUsername(request.getUsername())
+				.switchIfEmpty(Mono.error(new RuntimeException("User not found"))).flatMap(user -> {
+					if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+						return Mono.error(new RuntimeException("Invalid password"));
+					}
+					if (secret == null || secret.isEmpty()) {
+						return Mono.error(new RuntimeException("JWT secret is not configured"));
+					}
 
-	            try {
-	                String token = Jwts.builder()
-	                        .setSubject(user.getUsername())
-	                        .claim("role", user.getRole().name())
-	                        .setIssuedAt(new Date())
-	                        .setExpiration(new Date(System.currentTimeMillis() + 3600_000)) // 1 hour
-	                        .signWith(SignatureAlgorithm.HS256, secret.getBytes(StandardCharsets.UTF_8))
-	                        .compact();
+					try {
+						String token = Jwts.builder().setSubject(user.getUsername())
+								.claim("role", user.getRole().name()).setIssuedAt(new Date())
+								.setExpiration(new Date(System.currentTimeMillis() + 3600_000)) // 1 hour
+								.signWith(SignatureAlgorithm.HS256, secret.getBytes(StandardCharsets.UTF_8)).compact();
 
-	                JwtResponse response = new JwtResponse(
-	                        token
-	                );
+						JwtResponse response = new JwtResponse(token);
 
-	                return Mono.just(response);
-	            } catch (Exception e) {
-	                return Mono.error(new RuntimeException("Failed to generate JWT: " + e.getMessage(), e));
-	            }
-	        });
-	        
+						return Mono.just(response);
+					} catch (Exception e) {
+						return Mono.error(new RuntimeException("Failed to generate JWT: " + e.getMessage(), e));
+					}
+				});
+
 	}
 }

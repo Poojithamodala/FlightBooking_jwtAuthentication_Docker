@@ -32,16 +32,8 @@ public class AuthController {
 
 	@PostMapping("/login")
 	public Mono<ResponseEntity<JwtResponse>> login(@RequestBody LoginRequest request) {
-	    return authService.login(request)
-	            .map(ResponseEntity::ok)
-	            .onErrorResume(ex ->
-	                Mono.just(ResponseEntity
-	                        .status(HttpStatus.UNAUTHORIZED)
-	                        .body(new JwtResponse(null))
-	                )
-	            );
+		return authService.login(request).map(ResponseEntity::ok).onErrorResume(
+				ex -> Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new JwtResponse(null))));
 	}
-
-
 
 }

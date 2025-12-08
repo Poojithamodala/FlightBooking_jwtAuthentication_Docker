@@ -6,14 +6,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.Map;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-import com.flightapp.model.User;
+import com.flightapp.request.LoginRequest;
+import com.flightapp.request.SignUpRequest;
+import com.flightapp.response.JwtResponse;
 import com.flightapp.service.AuthService;
 
 import reactor.core.publisher.Mono;
@@ -30,52 +30,66 @@ class AuthControllerTest {
 		authController = new AuthController(authService);
 	}
 
-//	@Test
-//	void testRegisterSuccess() {
-//		User user = new User();
-//		user.setId("123");
-//		when(authService.register(any(User.class))).thenReturn(Mono.just(user));
-//
-//		Mono<String> result = authController.register(user);
-//
-//		StepVerifier.create(result).expectNext("user created with id: 123").verifyComplete();
-//
-//		verify(authService, times(1)).register(user);
-//	}
-//
-//	@Test
-//	void testLoginSuccess() {
-//		User user = new User();
-//		user.setEmail("pooja@gmail.com");
-//		user.setPassword("password");
-//
-//		when(authService.login(user.getEmail(), user.getPassword())).thenReturn(Mono.just("session-123"));
-//
-//		Mono<ResponseEntity<Map<String, String>>> result = authController.login(user);
-//
-//		StepVerifier.create(result)
-//				.expectNextMatches(response -> response.getStatusCode() == HttpStatus.OK
-//						&& response.getBody().get("sessionId").equals("session-123")
-//						&& response.getBody().get("message").equals("Login successful"))
-//				.verifyComplete();
-//
-//		verify(authService, times(1)).login(user.getEmail(), user.getPassword());
-//	}
-//
-//	@Test
-//	void testLoginFailure() {
-//		User user = new User();
-//		user.setEmail("pooja@gmail.com");
-//		user.setPassword("wrongpass");
-//
-//		when(authService.login(user.getEmail(), user.getPassword()))
-//				.thenReturn(Mono.error(new RuntimeException("Invalid credentials")));
-//
-//		Mono<ResponseEntity<Map<String, String>>> result = authController.login(user);
-//
-//		StepVerifier.create(result).expectNextMatches(response -> response.getStatusCode() == HttpStatus.UNAUTHORIZED
-//				&& response.getBody().get("error").equals("Invalid credentials")).verifyComplete();
-//
-//		verify(authService, times(1)).login(user.getEmail(), user.getPassword());
-//	}
+	@Test
+	void testRegisterSuccess() {
+
+		SignUpRequest request = new SignUpRequest();
+		request.setUsername("pooji");
+		request.setEmail("pooji@gmail.com");
+		request.setPassword("pass");
+		request.setRole("USER");
+
+		when(authService.register(any(SignUpRequest.class)))
+				.thenReturn(Mono.just("User registered successfully with id: 123"));
+
+		Mono<ResponseEntity<String>> result = authController.register(request);
+
+		StepVerifier.create(result).assertNext(response -> {
+			assert response.getStatusCode() == HttpStatus.CREATED;
+			assert response.getBody().equals("User registered successfully with id: 123");
+		}).verifyComplete();
+
+		verify(authService, times(1)).register(request);
+	}
+
+	@Test
+	void testLoginSuccess() {
+
+		LoginRequest request = new LoginRequest();
+		request.setUsername("pooji");
+		request.setPassword("pass");
+
+		JwtResponse jwtResponse = new JwtResponse("jwt-token-123");
+
+		when(authService.login(any(LoginRequest.class))).thenReturn(Mono.just(jwtResponse));
+
+		Mono<ResponseEntity<JwtResponse>> result = authController.login(request);
+
+		StepVerifier.create(result).assertNext(response -> {
+			assert response.getStatusCode() == HttpStatus.OK;
+			assert response.getBody().getToken().equals("jwt-token-123");
+		}).verifyComplete();
+
+		verify(authService, times(1)).login(request);
+	}
+
+	@Test
+	void testLoginFailure() {
+
+		LoginRequest request = new LoginRequest();
+		request.setUsername("pooji");
+		request.setPassword("wrongpass");
+
+		when(authService.login(any(LoginRequest.class)))
+				.thenReturn(Mono.error(new RuntimeException("Invalid password")));
+
+		Mono<ResponseEntity<JwtResponse>> result = authController.login(request);
+
+		StepVerifier.create(result).assertNext(response -> {
+			assert response.getStatusCode() == HttpStatus.UNAUTHORIZED;
+			assert response.getBody().getToken() == null;
+		}).verifyComplete();
+
+		verify(authService, times(1)).login(request);
+	}
 }
