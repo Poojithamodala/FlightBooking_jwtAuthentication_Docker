@@ -50,7 +50,7 @@ public class FlightController {
 	public Mono<Flight> getFlightById(@PathVariable String id) {
 		return flightService.searchFlightById(id);
 	}
-	
+
 	@GetMapping("/allflights")
 	public Flux<Flight> getAllFlights() {
 		return flightService.getAllFlights();

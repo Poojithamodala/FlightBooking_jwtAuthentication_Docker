@@ -41,7 +41,6 @@ class FlightControllerTest {
 	@Test
 	void addInventory_shouldReturnFlightIdAndMessage() {
 
-		// Arrange
 		Flight flight = new Flight();
 		flight.setAirline("Indigo");
 		flight.setFromPlace("BLR");
@@ -56,16 +55,12 @@ class FlightControllerTest {
 
 		when(flightService.addFlight(any(Flight.class))).thenReturn(Mono.just(saved));
 
-		// Act
 		Mono<Map<String, String>> result = flightController.addInventory(flight);
 
-		// Assert
 		StepVerifier.create(result).assertNext(map -> {
 			assertThat(map).containsEntry("message", "Flight added successfully").containsEntry("flightId",
 					"flight-123");
 		}).verifyComplete();
-
-		// Capture request argument
 		ArgumentCaptor<Flight> captor = ArgumentCaptor.forClass(Flight.class);
 		verify(flightService, times(1)).addFlight(captor.capture());
 
