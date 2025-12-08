@@ -2,11 +2,13 @@ package com.flightapp.controller;
 
 import java.util.List;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,9 +39,13 @@ public class BookingController {
 	}
 
 	@PostMapping("/booking/{departureFlightId}")
-	public Mono<String> bookTicket(@PathVariable String departureFlightId, @RequestBody BookingRequest request) {
-		return bookingService.bookTicket(request.getUserEmail(), departureFlightId, request.getReturnFlightId(),
-				request.getPassengers(), request.getTripType());
+	public Mono<ResponseEntity<String>> bookTicket(@PathVariable String departureFlightId,
+			@RequestBody BookingRequest request, @RequestHeader("Authorization") String authHeader) {
+
+		return bookingService
+				.bookTicket(request.getUserEmail(), departureFlightId, request.getReturnFlightId(),
+						request.getPassengers(), request.getTripType(), authHeader)
+				.map(response -> ResponseEntity.status(201).body(response));
 	}
 
 	@GetMapping("/ticket/{pnr}")
@@ -53,7 +59,7 @@ public class BookingController {
 	}
 
 	@DeleteMapping("/booking/cancel/{pnr}")
-	public Mono<String> cancel(@PathVariable String pnr) {
-		return bookingService.cancelByPnr(pnr);
+	public Mono<String> cancel(@PathVariable String pnr, @RequestHeader("Authorization") String token) {
+		return bookingService.cancelByPnr(pnr, token);
 	}
 }
