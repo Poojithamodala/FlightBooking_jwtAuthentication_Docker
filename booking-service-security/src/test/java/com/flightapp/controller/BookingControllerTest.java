@@ -35,6 +35,7 @@ class BookingControllerTest {
 
 	@Test
 	void testBookTicket() {
+
 		BookingController.BookingRequest request = new BookingController.BookingRequest();
 		request.setUserEmail("pooja@gmail.com");
 		request.setReturnFlightId("RET123");
@@ -47,13 +48,16 @@ class BookingControllerTest {
 		passenger.setSeatNumber("A1");
 		request.setPassengers(List.of(passenger));
 
-		when(bookingService.bookTicket(anyString(), anyString(), anyString(), anyList(), any(FLIGHTTYPE.class)))
-				.thenReturn(Mono.just("PNR123"));
+		when(bookingService.bookTicket(anyString(), anyString(), anyString(), anyList(), any(FLIGHTTYPE.class),
+				anyString())).thenReturn(Mono.just("PNR123"));
 
-		StepVerifier.create(bookingController.bookTicket("DEP123", request)).expectNext("PNR123").verifyComplete();
+		StepVerifier.create(bookingController.bookTicket("DEP123", request, "Bearer test-token"))
+				.expectNextMatches(
+						response -> response.getStatusCode().value() == 201 && "PNR123".equals(response.getBody()))
+				.verifyComplete();
 
 		verify(bookingService).bookTicket("pooja@gmail.com", "DEP123", "RET123", request.getPassengers(),
-				FLIGHTTYPE.ROUND_TRIP);
+				FLIGHTTYPE.ROUND_TRIP, "Bearer test-token");
 	}
 
 	@Test
@@ -89,10 +93,10 @@ class BookingControllerTest {
 
 	@Test
 	void testCancel() {
-		when(bookingService.cancelByPnr("PNR123")).thenReturn(Mono.just("Cancelled"));
 
-		StepVerifier.create(bookingController.cancel("PNR123")).expectNext("Cancelled").verifyComplete();
-
-		verify(bookingService).cancelByPnr("PNR123");
+		when(bookingService.cancelByPnr("PNR123", "Bearer test-token")).thenReturn(Mono.just("Cancelled"));
+		StepVerifier.create(bookingController.cancel("PNR123", "Bearer test-token")).expectNext("Cancelled")
+				.verifyComplete();
+		verify(bookingService).cancelByPnr("PNR123", "Bearer test-token");
 	}
 }
