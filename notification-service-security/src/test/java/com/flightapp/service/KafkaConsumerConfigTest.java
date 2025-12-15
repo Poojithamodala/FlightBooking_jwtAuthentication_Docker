@@ -31,7 +31,7 @@ class KafkaConsumerConfigTest {
 
 		Map<String, Object> configs = defaultFactory.getConfigurationProperties();
 		assertEquals("localhost:9092", configs.get(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
-				"Bootstrap servers should be localhost:9092");
+				"Bootstrap servers should be kafka:9092");
 
 		assertEquals("notification-service", configs.get(ConsumerConfig.GROUP_ID_CONFIG),
 				"Group id should be notification-service");
