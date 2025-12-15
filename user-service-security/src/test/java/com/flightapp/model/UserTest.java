@@ -46,7 +46,6 @@ class UserTest {
 
 		assertTrue(violations.stream().anyMatch(v -> v.getMessage().contains("Username cannot be null")));
 		assertTrue(violations.stream().anyMatch(v -> v.getMessage().contains("Email cannot be null")));
-		assertTrue(violations.stream().anyMatch(v -> v.getMessage().contains("Age cannot be null")));
-		assertTrue(violations.stream().anyMatch(v -> v.getMessage().contains("Gender cannot be null")));
+		assertTrue(violations.stream().anyMatch(v -> v.getMessage().contains("Password cannot be null")));
 	}
 }
