@@ -17,35 +17,37 @@ import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 
-import reactor.core.publisher.Mono;
-
 @Configuration
 @EnableWebFluxSecurity
 public class SecurityConfig {
 
-	@Value("${spring.security.oauth2.resourceserver.jwt.secret}")
-	private String secret;
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 
-	@Bean
-	public PasswordEncoder passwordEncoder() {
-		return new BCryptPasswordEncoder();
-	}
+    @Bean
+    public SecurityWebFilterChain security(ServerHttpSecurity http) {
 
-	@Bean
-	public SecurityWebFilterChain security(ServerHttpSecurity http) {
-		return http.csrf(ServerHttpSecurity.CsrfSpec::disable)
-				.authorizeExchange(exchanges -> exchanges.pathMatchers("/actuator/**").permitAll()
-						.pathMatchers(HttpMethod.POST, "/auth/register").permitAll()
-						.pathMatchers(HttpMethod.POST, "/auth/login").permitAll().anyExchange().authenticated())
-				.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.authenticationManager(authentication -> {
-					return Mono.empty();
-				}))).build();
-	}
+        return http
+            .csrf(ServerHttpSecurity.CsrfSpec::disable)
+            .authorizeExchange(exchanges -> exchanges
 
-	@Bean
-	public ReactiveJwtDecoder reactiveJwtDecoder() {
-		SecretKey key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-		return NimbusReactiveJwtDecoder.withSecretKey(key).build();
-	}
+                .pathMatchers("/actuator/**").permitAll()
+                .pathMatchers(HttpMethod.POST, "/auth/register").permitAll()
+                .pathMatchers(HttpMethod.POST, "/auth/login").permitAll()
 
+                .pathMatchers(HttpMethod.POST, "/auth/logout").permitAll()
+                .pathMatchers(HttpMethod.GET, "/auth/token/blacklisted").permitAll()
+
+                .anyExchange().authenticated()
+            )
+            .build();
+    }
+    
+//    @Bean
+//	public ReactiveJwtDecoder reactiveJwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.secret}") String secret) {
+//		SecretKey key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+//		return NimbusReactiveJwtDecoder.withSecretKey(key).build();
+//	}
 }
