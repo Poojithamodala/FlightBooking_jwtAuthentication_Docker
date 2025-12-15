@@ -20,12 +20,13 @@ public class User {
 	@NotBlank(message = "Email cannot be null")
 	private String email;
 
-	@NotNull(message = "Age cannot be null")
+//	@NotNull(message = "Age cannot be null")
 	private Integer age;
 
-	@NotBlank(message = "Gender cannot be null")
+//	@NotBlank(message = "Gender cannot be null")
 	private String gender;
-
+	
+	@NotBlank(message = "Password cannot be null")
 	private String password;
 
 	private ROLE role;
