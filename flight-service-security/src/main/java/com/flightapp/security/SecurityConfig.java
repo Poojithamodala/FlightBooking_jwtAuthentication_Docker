@@ -22,14 +22,18 @@ public class SecurityConfig {
 	@Bean
 	public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
 		return http.csrf(ServerHttpSecurity.CsrfSpec::disable)
-				.authorizeExchange(exchanges -> exchanges.pathMatchers("/actuator/**").permitAll()
+				.authorizeExchange(exchanges -> exchanges
+						.pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+						.pathMatchers("/actuator/**").permitAll()
 						.pathMatchers(HttpMethod.POST, "/api/flight/search").permitAll()
 						.pathMatchers(HttpMethod.POST, "/api/flight/search/airline").permitAll()
+//						.pathMatchers(HttpMethod.GET, "/flight-service/api/flight/search/airline").permitAll()
 						.pathMatchers(HttpMethod.GET, "/api/flight/allflights").permitAll()
 						.pathMatchers(HttpMethod.GET, "/api/flight/*").permitAll()
 						.pathMatchers(HttpMethod.POST, "/api/flight/airline/inventory/add").authenticated()
 						.anyExchange().authenticated())
-				.oauth2ResourceServer(oauth2 -> oauth2.jwt()).build();
+				.oauth2ResourceServer(oauth2 -> oauth2.jwt())
+				.build();
 	}
 
 	@Bean
