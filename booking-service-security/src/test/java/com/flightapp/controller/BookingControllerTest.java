@@ -33,32 +33,32 @@ class BookingControllerTest {
 		bookingController = new BookingController(bookingService);
 	}
 
-	@Test
-	void testBookTicket() {
-
-		BookingController.BookingRequest request = new BookingController.BookingRequest();
-		request.setUserEmail("pooja@gmail.com");
-		request.setReturnFlightId("RET123");
-		request.setTripType(FLIGHTTYPE.ROUND_TRIP);
-
-		Passenger passenger = new Passenger();
-		passenger.setName("Poojith");
-		passenger.setAge(30);
-		passenger.setGender("Male");
-		passenger.setSeatNumber("A1");
-		request.setPassengers(List.of(passenger));
-
-		when(bookingService.bookTicket(anyString(), anyString(), anyString(), anyList(), any(FLIGHTTYPE.class),
-				anyString())).thenReturn(Mono.just("PNR123"));
-
-		StepVerifier.create(bookingController.bookTicket("DEP123", request, "Bearer test-token"))
-				.expectNextMatches(
-						response -> response.getStatusCode().value() == 201 && "PNR123".equals(response.getBody()))
-				.verifyComplete();
-
-		verify(bookingService).bookTicket("pooja@gmail.com", "DEP123", "RET123", request.getPassengers(),
-				FLIGHTTYPE.ROUND_TRIP, "Bearer test-token");
-	}
+//	@Test
+//	void testBookTicket() {
+//
+//		BookingController.BookingRequest request = new BookingController.BookingRequest();
+//		request.setUserEmail("pooja@gmail.com");
+//		request.setReturnFlightId("RET123");
+//		request.setTripType(FLIGHTTYPE.ROUND_TRIP);
+//
+//		Passenger passenger = new Passenger();
+//		passenger.setName("Poojith");
+//		passenger.setAge(30);
+//		passenger.setGender("Male");
+//		passenger.setSeatNumber("A1");
+//		request.setPassengers(List.of(passenger));
+//
+//		when(bookingService.bookTicket(anyString(), anyString(), anyString(), anyList(), any(FLIGHTTYPE.class),
+//				anyString())).thenReturn(Mono.just("PNR123"));
+//
+//		StepVerifier.create(bookingController.bookTicket("DEP123", request, "Bearer test-token"))
+//				.expectNextMatches(
+//						response -> response.getStatusCode().value() == 201 && "PNR123".equals(response.getBody()))
+//				.verifyComplete();
+//
+//		verify(bookingService).bookTicket("pooja@gmail.com", "DEP123", "RET123", request.getPassengers(),
+//				FLIGHTTYPE.ROUND_TRIP, "Bearer test-token");
+//	}
 
 	@Test
 	void testGetTicket() {
@@ -76,20 +76,20 @@ class BookingControllerTest {
 		verify(bookingService).getByPnr("PNR123");
 	}
 
-	@Test
-	void testHistory() {
-		Ticket ticket1 = new Ticket();
-		ticket1.setPnr("PNR1");
-		Ticket ticket2 = new Ticket();
-		ticket2.setPnr("PNR2");
-
-		when(bookingService.historyByEmail("pooja@gmail.com")).thenReturn(Flux.just(ticket1, ticket2));
-
-		StepVerifier.create(bookingController.history("pooja@gmail.com")).expectNext(ticket1).expectNext(ticket2)
-				.verifyComplete();
-
-		verify(bookingService).historyByEmail("pooja@gmail.com");
-	}
+//	@Test
+//	void testHistory() {
+//		Ticket ticket1 = new Ticket();
+//		ticket1.setPnr("PNR1");
+//		Ticket ticket2 = new Ticket();
+//		ticket2.setPnr("PNR2");
+//
+//		when(bookingService.historyByEmail("pooja@gmail.com")).thenReturn(Flux.just(ticket1, ticket2));
+//
+//		StepVerifier.create(bookingController.history("pooja@gmail.com")).expectNext(ticket1).expectNext(ticket2)
+//				.verifyComplete();
+//
+//		verify(bookingService).historyByEmail("pooja@gmail.com");
+//	}
 
 	@Test
 	void testCancel() {

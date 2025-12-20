@@ -42,7 +42,6 @@ public class Ticket {
 
 	@Min(0)
 	private Double totalPrice;
-
 	private boolean canceled;
 
 	@Transient
