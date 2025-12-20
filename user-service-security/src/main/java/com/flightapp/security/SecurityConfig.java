@@ -36,18 +36,19 @@ public class SecurityConfig {
                 .pathMatchers("/actuator/**").permitAll()
                 .pathMatchers(HttpMethod.POST, "/auth/register").permitAll()
                 .pathMatchers(HttpMethod.POST, "/auth/login").permitAll()
-
+                .pathMatchers(HttpMethod.GET, "/auth/profile").authenticated()
                 .pathMatchers(HttpMethod.POST, "/auth/logout").permitAll()
                 .pathMatchers(HttpMethod.GET, "/auth/token/blacklisted").permitAll()
 
                 .anyExchange().authenticated()
             )
+            .oauth2ResourceServer(oauth2 -> oauth2.jwt())
             .build();
     }
     
-//    @Bean
-//	public ReactiveJwtDecoder reactiveJwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.secret}") String secret) {
-//		SecretKey key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-//		return NimbusReactiveJwtDecoder.withSecretKey(key).build();
-//	}
+    @Bean
+	public ReactiveJwtDecoder reactiveJwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.secret}") String secret) {
+		SecretKey key = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+		return NimbusReactiveJwtDecoder.withSecretKey(key).build();
+	}
 }
