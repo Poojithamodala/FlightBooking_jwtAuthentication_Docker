@@ -48,6 +48,9 @@ public class AuthServiceImpl implements AuthService {
 					user.setEmail(request.getEmail());
 					user.setPassword(passwordEncoder.encode(request.getPassword()));
 					user.setRole("ADMIN".equalsIgnoreCase(request.getRole()) ? ROLE.ADMIN : ROLE.USER);
+					
+					user.setAge(request.getAge());
+				    user.setGender(request.getGender());
 
 					return userRepository.save(user)
 							.map(saved -> "User registered successfully. ");
@@ -76,7 +79,7 @@ public class AuthServiceImpl implements AuthService {
 
 	            try {
 	                String token = Jwts.builder()
-	                        .setSubject(user.getEmail())               // ✅ email as subject
+	                        .setSubject(user.getEmail())               
 	                        .claim("role", user.getRole().name())
 	                        .setIssuedAt(new Date())
 	                        .setExpiration(

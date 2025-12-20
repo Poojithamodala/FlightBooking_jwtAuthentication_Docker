@@ -10,4 +10,5 @@ public interface AuthService {
     Mono<String> register(SignUpRequest request);
     Mono<JwtResponse> login(LoginRequest request);
     Mono<String> logout(String token);
+    
 }
