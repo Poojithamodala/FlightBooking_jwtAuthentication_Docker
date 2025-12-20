@@ -27,6 +27,8 @@ public class Passenger {
 
 	@NotBlank(message = "Seat number cannot be blank")
 	private String seatNumber;
+	
+	private String flightId;
 
 	private String mealPreference;
 

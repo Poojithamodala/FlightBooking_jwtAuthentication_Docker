@@ -2,11 +2,17 @@ package com.flightapp.service.impl;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import javax.crypto.SecretKey;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -14,14 +20,19 @@ import com.flightapp.dto.FlightDto;
 import com.flightapp.exception.FlightBookingException;
 import com.flightapp.feign.FlightClient;
 import com.flightapp.messaging.BookingEvent;
+import com.flightapp.model.BookingHistoryResponse;
 import com.flightapp.model.FLIGHTTYPE;
 import com.flightapp.model.Passenger;
+import com.flightapp.model.ReturnFlightDTO;
 import com.flightapp.model.Ticket;
 import com.flightapp.repository.PassengerRepository;
 import com.flightapp.repository.TicketRepository;
 import com.flightapp.service.BookingService;
 
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -29,7 +40,6 @@ import reactor.core.scheduler.Schedulers;
 
 @Service
 @RequiredArgsConstructor
-@CircuitBreaker(name = "bookingServiceImplCircuitBreaker", fallbackMethod = "bookingFallback")
 public class BookingServiceImpl implements BookingService {
 
 	private final TicketRepository ticketRepository;
@@ -39,18 +49,59 @@ public class BookingServiceImpl implements BookingService {
 
 	private static final String TOPIC = "booking-events";
 
-	@Override
-	public Mono<String> bookTicket(String userEmail, String departureFlightId, String returnFlightId,
-			List<Passenger> passengers, FLIGHTTYPE tripType, String token) {
+	@Value("${spring.security.oauth2.resourceserver.jwt.secret}")
+	private String secret;
 
+	private SecretKey key;
+
+	@PostConstruct
+	public void init() {
+		key = Keys.hmacShaKeyFor(secret.getBytes());
+	}
+
+	private String extractEmail(String token) {
+		return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token.replace("Bearer ", "")).getBody()
+				.getSubject();
+	}
+	
+	@Override
+	public Mono<String> bookTicket(String departureFlightId, String returnFlightId, List<Passenger> passengers,
+			FLIGHTTYPE tripType, String token) {
+		String userEmail = extractEmail(token);
 		int seatCount = passengers.size();
 
-		return Mono.fromCallable(() -> {
+		if (passengers == null || passengers.isEmpty()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Passengers list cannot be empty");
+		}
+
+		if (tripType == FLIGHTTYPE.ROUND_TRIP && returnFlightId == null) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Return flight is required for round trip");
+		}
+
+		Set<String> seats = passengers.stream().map(Passenger::getSeatNumber).collect(Collectors.toSet());
+
+		if (seats.size() != passengers.size()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate seat numbers are not allowed");
+		}
+
+		Mono<Void> seatAvailabilityCheck = Flux.fromIterable(passengers).flatMap(p -> passengerRepository
+				.existsByFlightIdAndSeatNumber(departureFlightId, p.getSeatNumber()).flatMap(exists -> {
+					if (exists) {
+						return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT,
+								"Seat " + p.getSeatNumber() + " is already booked"));
+					}
+					return Mono.empty();
+				})).then();
+
+		return seatAvailabilityCheck.then(Mono.fromCallable(() -> {
 			FlightDto depFlight = getFlightOrThrow(departureFlightId, seatCount, "Departure", token);
+
 			FlightDto retFlight = getReturnFlightIfNeeded(returnFlightId, tripType, seatCount, token);
+
 			reserveFlights(retFlight, departureFlightId, returnFlightId, seatCount, token);
+
 			return new CheckedFlights(depFlight, retFlight);
-		}).subscribeOn(Schedulers.boundedElastic())
+		}).subscribeOn(Schedulers.boundedElastic()))
 				.flatMap(checked -> createTicket(userEmail, departureFlightId, returnFlightId, passengers, tripType,
 						checked.dep(), checked.ret()))
 				.onErrorResume(e -> Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e)));
@@ -106,7 +157,10 @@ public class BookingServiceImpl implements BookingService {
 		}
 		ticket.setTotalPrice(total);
 		ticket.setCanceled(false);
-
+		
+		//logs----------
+		System.out.println("booking email = " + userEmail);
+		
 		return ticketRepository.save(ticket).flatMap(saved -> {
 			passengers.forEach(p -> p.setTicketId(saved.getId()));
 			return passengerRepository.saveAll(passengers).then(Mono.just(saved));
@@ -118,9 +172,64 @@ public class BookingServiceImpl implements BookingService {
 		return ticketRepository.findByPnr(pnr);
 	}
 
+//	@Override
+//	public Flux<Ticket> history(Authentication authentication) {
+//
+//	    JwtAuthenticationToken jwtAuth = (JwtAuthenticationToken) authentication;
+//	    Jwt jwt = jwtAuth.getToken();
+//	    String email = jwt.getSubject();
+//	    return ticketRepository.findByUserEmail(email);
+//	}
+
+	@CircuitBreaker(name = "bookingServiceImplCircuitBreaker", fallbackMethod = "bookingFallback")
 	@Override
-	public Flux<Ticket> historyByEmail(String email) {
-		return ticketRepository.findByUserEmail(email);
+	public Flux<BookingHistoryResponse> history(Authentication authentication) {
+
+	    JwtAuthenticationToken jwtAuth = (JwtAuthenticationToken) authentication;
+	    String email = jwtAuth.getToken().getSubject();
+
+	    return ticketRepository.findByUserEmail(email)
+	        .flatMap(ticket -> {
+	            Mono<FlightDto> departureMono = Mono.fromCallable(() ->
+	                flightClient.getFlight(ticket.getDepartureFlightId(), "Bearer " + jwtAuth.getToken().getTokenValue())
+	            ).subscribeOn(Schedulers.boundedElastic());
+
+	            Mono<ReturnFlightDTO> returnMono = Mono.justOrEmpty(ticket.getReturnFlightId())
+	                .flatMap(id -> Mono.fromCallable(() -> {
+	                    FlightDto rf = flightClient.getFlight(id, "Bearer " + jwtAuth.getToken().getTokenValue());
+	                    return new ReturnFlightDTO(rf.getAirline(), rf.getFromPlace(), rf.getToPlace(),
+	                                               rf.getDepartureTime(), rf.getArrivalTime());
+	                }).subscribeOn(Schedulers.boundedElastic()));
+
+	            return Mono.zip(departureMono, returnMono.defaultIfEmpty(null))
+	                .map(tuple -> {
+	                    FlightDto dep = tuple.getT1();
+	                    ReturnFlightDTO ret = tuple.getT2(); // can be null
+
+	                    return new BookingHistoryResponse(
+	                        ticket.getId(),
+	                        ticket.getPnr(),
+	                        ticket.getTripType(),
+	                        ticket.getBookingTime(),
+	                        ticket.getSeatsBooked(),
+	                        ticket.getMealType(),
+	                        ticket.getTotalPrice(),
+	                        ticket.isCanceled(),
+	                        dep.getAirline(),
+	                        dep.getFromPlace(),
+	                        dep.getToPlace(),
+	                        dep.getDepartureTime(),
+	                        dep.getArrivalTime(),
+	                        ret
+	                    );
+	                });
+	        });
+	}
+
+	// fallback
+	public Flux<BookingHistoryResponse> bookingFallback(Authentication authentication, Throwable ex) {
+	    System.err.println("Booking history fallback triggered: " + ex.getMessage());
+	    return Flux.empty();
 	}
 
 	@Override

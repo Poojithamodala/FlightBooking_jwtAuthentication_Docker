@@ -6,8 +6,10 @@ import org.springframework.stereotype.Repository;
 import com.flightapp.model.Passenger;
 
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 @Repository
 public interface PassengerRepository extends ReactiveMongoRepository<Passenger, String> {
 	Flux<Passenger> findByTicketId(String ticketId);
+	Mono<Boolean> existsByFlightIdAndSeatNumber(String flightId, String seatNumber);
 }
