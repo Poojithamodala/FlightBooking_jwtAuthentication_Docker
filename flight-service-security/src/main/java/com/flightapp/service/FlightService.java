@@ -1,7 +1,9 @@
 package com.flightapp.service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
+import com.flightapp.dto.FlightSearchRequest;
 import com.flightapp.model.Flight;
 
 import reactor.core.publisher.Flux;
@@ -22,4 +24,5 @@ public interface FlightService {
 	Mono<Flight> reserveSeats(String flightId, int seatCount);
 
     Mono<Flight> releaseSeats(String flightId, int seatCount);
+    
 }

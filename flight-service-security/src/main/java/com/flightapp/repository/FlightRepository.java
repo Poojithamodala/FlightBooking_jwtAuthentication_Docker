@@ -20,4 +20,6 @@ public interface FlightRepository extends ReactiveCrudRepository<Flight, String>
 
 	Mono<Flight> findByAirlineAndFromPlaceAndToPlaceAndDepartureTime(String airline, String fromPlace, String toPlace,
 			LocalDateTime departureTime);
+	
+//	Flux<Flight> getFightByFromPlaceAndToPlace(String fromPlace, String toPlace);
 }
