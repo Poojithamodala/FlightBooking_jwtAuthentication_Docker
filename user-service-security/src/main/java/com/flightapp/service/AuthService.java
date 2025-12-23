@@ -1,5 +1,6 @@
 package com.flightapp.service;
 
+import com.flightapp.model.ChangePassword;
 import com.flightapp.request.LoginRequest;
 import com.flightapp.request.SignUpRequest;
 import com.flightapp.response.JwtResponse;
@@ -10,5 +11,5 @@ public interface AuthService {
     Mono<String> register(SignUpRequest request);
     Mono<JwtResponse> login(LoginRequest request);
     Mono<String> logout(String token);
-    
+    Mono<String> changePassword(String email, ChangePassword request);
 }

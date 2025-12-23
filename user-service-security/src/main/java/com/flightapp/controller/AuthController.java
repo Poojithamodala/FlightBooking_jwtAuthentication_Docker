@@ -1,18 +1,23 @@
 package com.flightapp.controller;
 
 import java.util.Date;
+import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.flightapp.model.BlacklistedToken;
+import com.flightapp.model.ChangePassword;
 import com.flightapp.model.User;
 import com.flightapp.repository.TokenBlacklistRepository;
 import com.flightapp.repository.UserRepository;
@@ -60,6 +65,15 @@ public class AuthController {
 	public Mono<User> getProfile(Authentication authentication) {
 		String email = authentication.getName(); // comes from JWT
 		return userRepository.findByEmail(email).switchIfEmpty(Mono.error(new RuntimeException("User not found")));
+	}
+	
+	@PutMapping("/changepassword")
+	public Mono<ResponseEntity<Map<String, String>>> changePassword(
+	        @AuthenticationPrincipal Jwt jwt,
+	        @RequestBody ChangePassword request) {
+
+	    return authService.changePassword(jwt.getSubject(), request)
+	            .map(msg -> ResponseEntity.ok(Map.of("message", msg)));
 	}
 
 	@PostMapping("/logout")

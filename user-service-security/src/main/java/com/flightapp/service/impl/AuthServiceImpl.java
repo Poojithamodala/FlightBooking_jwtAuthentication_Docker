@@ -2,13 +2,17 @@ package com.flightapp.service.impl;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.flightapp.model.BlacklistedToken;
+import com.flightapp.model.ChangePassword;
 import com.flightapp.model.ROLE;
 import com.flightapp.model.User;
 import com.flightapp.repository.TokenBlacklistRepository;
@@ -80,7 +84,8 @@ public class AuthServiceImpl implements AuthService {
 	            try {
 	                String token = Jwts.builder()
 	                        .setSubject(user.getEmail())               
-	                        .claim("role", user.getRole().name())
+//	                        .claim("role", user.getRole().name())
+	                        .claim("roles", List.of(user.getRole().name()))
 	                        .setIssuedAt(new Date())
 	                        .setExpiration(
 	                                new Date(System.currentTimeMillis() + 3600_000) // 1 hour
@@ -99,6 +104,33 @@ public class AuthServiceImpl implements AuthService {
 	                );
 	            }
 	        });
+	}
+	
+	@Override
+	public Mono<String> changePassword(String email, ChangePassword request) {
+
+	    return userRepository.findByEmail(email)
+	            .switchIfEmpty(Mono.error(
+	                new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")
+	            ))
+	            .flatMap(user -> {
+
+	                if (!passwordEncoder.matches(
+	                        request.getOldPassword(), user.getPassword())) {
+	                    return Mono.error(
+	                        new ResponseStatusException(
+	                            HttpStatus.BAD_REQUEST,
+	                            "Old password is incorrect"
+	                        )
+	                    );
+	                }
+
+	                user.setPassword(
+	                        passwordEncoder.encode(request.getNewPassword())
+	                );
+	                return userRepository.save(user);
+	            })
+	            .thenReturn("Password changed successfully");
 	}
 	
 	@Override
