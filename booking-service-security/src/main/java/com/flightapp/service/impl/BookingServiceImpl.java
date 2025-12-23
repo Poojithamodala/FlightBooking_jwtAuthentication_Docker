@@ -11,25 +11,22 @@ import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.flightapp.dto.FlightDto;
 import com.flightapp.exception.FlightBookingException;
 import com.flightapp.feign.FlightClient;
+import com.flightapp.feign.FlightWebClient;
 import com.flightapp.messaging.BookingEvent;
 import com.flightapp.model.BookingHistoryResponse;
 import com.flightapp.model.FLIGHTTYPE;
 import com.flightapp.model.Passenger;
-import com.flightapp.model.ReturnFlightDTO;
 import com.flightapp.model.Ticket;
 import com.flightapp.repository.PassengerRepository;
 import com.flightapp.repository.TicketRepository;
 import com.flightapp.service.BookingService;
 
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
@@ -46,6 +43,7 @@ public class BookingServiceImpl implements BookingService {
 	private final PassengerRepository passengerRepository;
 	private final FlightClient flightClient;
 	private final KafkaTemplate<String, BookingEvent> kafkaTemplate;
+	private final FlightWebClient flightWebClient;
 
 	private static final String TOPIC = "booking-events";
 
@@ -158,8 +156,6 @@ public class BookingServiceImpl implements BookingService {
 		ticket.setTotalPrice(total);
 		ticket.setCanceled(false);
 		
-		//logs----------
-		System.out.println("booking email = " + userEmail);
 		
 		return ticketRepository.save(ticket).flatMap(saved -> {
 			passengers.forEach(p -> p.setTicketId(saved.getId()));
@@ -180,56 +176,58 @@ public class BookingServiceImpl implements BookingService {
 //	    String email = jwt.getSubject();
 //	    return ticketRepository.findByUserEmail(email);
 //	}
-
-	@CircuitBreaker(name = "bookingServiceImplCircuitBreaker", fallbackMethod = "bookingFallback")
 	@Override
-	public Flux<BookingHistoryResponse> history(Authentication authentication) {
+	public Flux<BookingHistoryResponse> historyByEmail(String email, String token) {
 
-	    JwtAuthenticationToken jwtAuth = (JwtAuthenticationToken) authentication;
-	    String email = jwtAuth.getToken().getSubject();
+	    System.out.println("📩 Fetching booking history for: " + email);
+
+	    String authHeader = token.startsWith("Bearer ")
+	            ? token
+	            : "Bearer " + token;
 
 	    return ticketRepository.findByUserEmail(email)
-	        .flatMap(ticket -> {
-	            Mono<FlightDto> departureMono = Mono.fromCallable(() ->
-	                flightClient.getFlight(ticket.getDepartureFlightId(), "Bearer " + jwtAuth.getToken().getTokenValue())
-	            ).subscribeOn(Schedulers.boundedElastic());
+	            .flatMap(ticket ->
+	                    Mono.zip(
+	                            flightWebClient.getFlight(
+	                                    ticket.getDepartureFlightId(),
+	                                    authHeader
+	                            ),
+	                            passengerRepository
+	                                    .findByTicketId(ticket.getId())
+	                                    .collectList()
+	                    )
+	                    .map(tuple -> {
+	                        FlightDto flight = tuple.getT1();
+	                        List<Passenger> passengers = tuple.getT2();
 
-	            Mono<ReturnFlightDTO> returnMono = Mono.justOrEmpty(ticket.getReturnFlightId())
-	                .flatMap(id -> Mono.fromCallable(() -> {
-	                    FlightDto rf = flightClient.getFlight(id, "Bearer " + jwtAuth.getToken().getTokenValue());
-	                    return new ReturnFlightDTO(rf.getAirline(), rf.getFromPlace(), rf.getToPlace(),
-	                                               rf.getDepartureTime(), rf.getArrivalTime());
-	                }).subscribeOn(Schedulers.boundedElastic()));
+	                        return new BookingHistoryResponse(
+	                                ticket.getId(),
+	                                ticket.getPnr(),
+	                                ticket.getTripType(),
+	                                ticket.getBookingTime(),
+	                                ticket.getSeatsBooked(),
+	                                ticket.getMealType(),
+	                                ticket.getTotalPrice(),
+	                                ticket.isCanceled(),
 
-	            return Mono.zip(departureMono, returnMono.defaultIfEmpty(null))
-	                .map(tuple -> {
-	                    FlightDto dep = tuple.getT1();
-	                    ReturnFlightDTO ret = tuple.getT2(); // can be null
+	                                // flight details
+	                                flight.getAirline(),
+	                                flight.getFromPlace(),
+	                                flight.getToPlace(),
+	                                flight.getDepartureTime(),
+	                                flight.getArrivalTime(),
 
-	                    return new BookingHistoryResponse(
-	                        ticket.getId(),
-	                        ticket.getPnr(),
-	                        ticket.getTripType(),
-	                        ticket.getBookingTime(),
-	                        ticket.getSeatsBooked(),
-	                        ticket.getMealType(),
-	                        ticket.getTotalPrice(),
-	                        ticket.isCanceled(),
-	                        dep.getAirline(),
-	                        dep.getFromPlace(),
-	                        dep.getToPlace(),
-	                        dep.getDepartureTime(),
-	                        dep.getArrivalTime(),
-	                        ret
-	                    );
-	                });
-	        });
-	}
-
-	// fallback
-	public Flux<BookingHistoryResponse> bookingFallback(Authentication authentication, Throwable ex) {
-	    System.err.println("Booking history fallback triggered: " + ex.getMessage());
-	    return Flux.empty();
+	                                // passengers
+	                                passengers
+	                        );
+	                    })
+	            )
+	            .doOnNext(r ->
+	                    System.out.println("✅ History record created for PNR: " + r.getPnr())
+	            )
+	            .doOnError(e ->
+	                    System.err.println("❌ History error: " + e.getMessage())
+	            );
 	}
 
 	@Override

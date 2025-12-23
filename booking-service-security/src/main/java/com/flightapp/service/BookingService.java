@@ -2,8 +2,6 @@ package com.flightapp.service;
 
 import java.util.List;
 
-import org.springframework.security.core.Authentication;
-
 import com.flightapp.model.BookingHistoryResponse;
 import com.flightapp.model.FLIGHTTYPE;
 import com.flightapp.model.Passenger;
@@ -22,7 +20,7 @@ public interface BookingService {
 //	Flux<Ticket> historyByEmail(String email);
 	
 //	Flux<Ticket> history(Authentication authentication);
-	Flux<BookingHistoryResponse> history(Authentication authentication);
+	Flux<BookingHistoryResponse> historyByEmail(String email, String token);
 
 	Mono<String> cancelByPnr(String pnr, String token);
 }	
