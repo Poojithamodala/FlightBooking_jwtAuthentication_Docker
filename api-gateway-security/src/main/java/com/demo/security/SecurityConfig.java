@@ -10,20 +10,22 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
+import reactor.core.publisher.Flux;
+
 @Configuration
 @EnableWebFluxSecurity
-@EnableReactiveMethodSecurity
 public class SecurityConfig {
 
     @Bean
@@ -41,10 +43,12 @@ public class SecurityConfig {
 
                         .pathMatchers(HttpMethod.POST, "/user-service/auth/register").permitAll()
                         .pathMatchers(HttpMethod.POST, "/user-service/auth/login").permitAll()
+                        .pathMatchers(HttpMethod.PUT, "/user-service/auth/changepassword").authenticated()
                         
                         .pathMatchers(HttpMethod.POST, "/user-service/auth/logout").authenticated()
                         .pathMatchers(HttpMethod.GET, "/user-service/auth/token/blacklisted").permitAll()
                         .pathMatchers(HttpMethod.GET, "/user-service/auth/profile").authenticated()
+                 
                         
                         .pathMatchers(HttpMethod.GET, "/flight-service/api/flight/allflights").hasRole("ADMIN")
                         .pathMatchers("/flight-service/api/flight/airline/inventory/add").hasRole("ADMIN")
@@ -59,7 +63,10 @@ public class SecurityConfig {
 
                         .anyExchange().authenticated()
                 )
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt())
+//                .oauth2ResourceServer(oauth2 -> oauth2.jwt())
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                )
                 .addFilterAfter(
                 		jwtBlacklistWebFilter,
                         SecurityWebFiltersOrder.AUTHENTICATION
@@ -93,4 +100,25 @@ public class SecurityConfig {
         );
         return NimbusReactiveJwtDecoder.withSecretKey(key).build();
     }
+    
+    @Bean
+    public ReactiveJwtAuthenticationConverter jwtAuthenticationConverter() {
+
+        JwtGrantedAuthoritiesConverter authoritiesConverter =
+                new JwtGrantedAuthoritiesConverter();
+
+        authoritiesConverter.setAuthorityPrefix("ROLE_"); // REQUIRED
+//        authoritiesConverter.setAuthoritiesClaimName("role"); // from JWT
+        authoritiesConverter.setAuthoritiesClaimName("roles");
+        
+        ReactiveJwtAuthenticationConverter converter =
+                new ReactiveJwtAuthenticationConverter();
+
+        converter.setJwtGrantedAuthoritiesConverter(
+                jwt -> Flux.fromIterable(authoritiesConverter.convert(jwt))
+        );
+
+        return converter;
+    }
+
 }
