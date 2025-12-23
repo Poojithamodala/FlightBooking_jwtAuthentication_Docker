@@ -7,7 +7,6 @@ import org.springframework.test.context.ActiveProfiles;
 import com.flightapp.FlightServiceApplication;
 
 @SpringBootTest(classes = FlightServiceApplication.class)
-@ActiveProfiles("local")
 class FlightServiceApplicationTests {
 
 	@Test
