@@ -30,6 +30,7 @@ public class FlightController {
 	private final FlightService flightService;
 
 	@PostMapping("/airline/inventory/add")
+	@PreAuthorize("hasRole('ADMIN')")
 	@ResponseStatus(HttpStatus.CREATED)
 	public Mono<Map<String, String>> addInventory(@Valid @RequestBody Flight flight) {
 		return flightService.addFlight(flight)
