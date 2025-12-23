@@ -37,6 +37,7 @@ public class SecurityConfig {
                 .pathMatchers(HttpMethod.POST, "/auth/register").permitAll()
                 .pathMatchers(HttpMethod.POST, "/auth/login").permitAll()
                 .pathMatchers(HttpMethod.GET, "/auth/profile").authenticated()
+                .pathMatchers(HttpMethod.PUT, "/auth/changepassword").authenticated()
                 .pathMatchers(HttpMethod.POST, "/auth/logout").permitAll()
                 .pathMatchers(HttpMethod.GET, "/auth/token/blacklisted").permitAll()
 
