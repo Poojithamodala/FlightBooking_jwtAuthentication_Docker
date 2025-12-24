@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import javax.crypto.SecretKey;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ import com.flightapp.repository.PassengerRepository;
 import com.flightapp.repository.TicketRepository;
 import com.flightapp.service.BookingService;
 
+import feign.RequestInterceptor;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
@@ -38,6 +40,8 @@ import reactor.core.scheduler.Schedulers;
 @Service
 @RequiredArgsConstructor
 public class BookingServiceImpl implements BookingService {
+
+	private final RequestInterceptor authInterceptor;
 
 	private final TicketRepository ticketRepository;
 	private final PassengerRepository passengerRepository;
@@ -61,16 +65,25 @@ public class BookingServiceImpl implements BookingService {
 		return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token.replace("Bearer ", "")).getBody()
 				.getSubject();
 	}
-	
+
 	@Override
 	public Mono<String> bookTicket(String departureFlightId, String returnFlightId, List<Passenger> passengers,
 			FLIGHTTYPE tripType, String token) {
 		String userEmail = extractEmail(token);
-		int seatCount = passengers.size();
 
 		if (passengers == null || passengers.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Passengers list cannot be empty");
 		}
+
+		int seatCount = passengers.size();
+
+		passengers.forEach(p -> {
+			p.setSeatNumber(p.getSeatNumber().trim().toUpperCase());
+		});
+
+		passengers.forEach(p -> {
+			p.setFlightId(departureFlightId);
+		});
 
 		if (tripType == FLIGHTTYPE.ROUND_TRIP && returnFlightId == null) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Return flight is required for round trip");
@@ -81,7 +94,26 @@ public class BookingServiceImpl implements BookingService {
 		if (seats.size() != passengers.size()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate seat numbers are not allowed");
 		}
-
+//		return Mono.fromCallable(() -> {
+//			FlightDto depFlight = getFlightOrThrow(departureFlightId, seatCount, "Departure", token);
+//
+//			FlightDto retFlight = getReturnFlightIfNeeded(returnFlightId, tripType, seatCount, token);
+//
+//			reserveFlights(retFlight, departureFlightId, returnFlightId, seatCount, token);
+//
+//			return new CheckedFlights(depFlight, retFlight);
+//		}).subscribeOn(Schedulers.boundedElastic())
+//				.flatMap(checked -> createTicket(userEmail, departureFlightId, returnFlightId, passengers, tripType,
+//						checked.dep(), checked.ret()))
+//				.onErrorResume(ex -> {
+//				    if (ex instanceof ResponseStatusException) {
+//				        return Mono.error(ex); // propagate
+//				    } else {
+//				        return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex));
+//				    }
+//				});
+//
+//	}
 		Mono<Void> seatAvailabilityCheck = Flux.fromIterable(passengers).flatMap(p -> passengerRepository
 				.existsByFlightIdAndSeatNumber(departureFlightId, p.getSeatNumber()).flatMap(exists -> {
 					if (exists) {
@@ -101,8 +133,7 @@ public class BookingServiceImpl implements BookingService {
 			return new CheckedFlights(depFlight, retFlight);
 		}).subscribeOn(Schedulers.boundedElastic()))
 				.flatMap(checked -> createTicket(userEmail, departureFlightId, returnFlightId, passengers, tripType,
-						checked.dep(), checked.ret()))
-				.onErrorResume(e -> Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e)));
+						checked.dep(), checked.ret()));
 	}
 
 	private FlightDto getFlightOrThrow(String flightId, int seatCount, String type, String token) {
@@ -155,11 +186,17 @@ public class BookingServiceImpl implements BookingService {
 		}
 		ticket.setTotalPrice(total);
 		ticket.setCanceled(false);
-		
-		
+
 		return ticketRepository.save(ticket).flatMap(saved -> {
 			passengers.forEach(p -> p.setTicketId(saved.getId()));
-			return passengerRepository.saveAll(passengers).then(Mono.just(saved));
+			return passengerRepository.saveAll(passengers)
+				    .onErrorMap(DuplicateKeyException.class,
+				        e -> new ResponseStatusException(
+				            HttpStatus.CONFLICT,
+				            "One or more seats are already booked"
+				        )
+				    )
+				    .then(Mono.just(saved));
 		}).doOnSuccess(saved -> sendEvent("BOOKING_CONFIRMED", saved)).map(Ticket::getPnr);
 	}
 
@@ -179,55 +216,29 @@ public class BookingServiceImpl implements BookingService {
 	@Override
 	public Flux<BookingHistoryResponse> historyByEmail(String email, String token) {
 
-	    System.out.println("📩 Fetching booking history for: " + email);
+		System.out.println("Fetching booking history for: " + email);
 
-	    String authHeader = token.startsWith("Bearer ")
-	            ? token
-	            : "Bearer " + token;
+		String authHeader = token.startsWith("Bearer ") ? token : "Bearer " + token;
 
-	    return ticketRepository.findByUserEmail(email)
-	            .flatMap(ticket ->
-	                    Mono.zip(
-	                            flightWebClient.getFlight(
-	                                    ticket.getDepartureFlightId(),
-	                                    authHeader
-	                            ),
-	                            passengerRepository
-	                                    .findByTicketId(ticket.getId())
-	                                    .collectList()
-	                    )
-	                    .map(tuple -> {
-	                        FlightDto flight = tuple.getT1();
-	                        List<Passenger> passengers = tuple.getT2();
+		return ticketRepository.findByUserEmail(email)
+				.flatMap(ticket -> Mono.zip(flightWebClient.getFlight(ticket.getDepartureFlightId(), authHeader),
+						passengerRepository.findByTicketId(ticket.getId()).collectList()).map(tuple -> {
+							FlightDto flight = tuple.getT1();
+							List<Passenger> passengers = tuple.getT2();
 
-	                        return new BookingHistoryResponse(
-	                                ticket.getId(),
-	                                ticket.getPnr(),
-	                                ticket.getTripType(),
-	                                ticket.getBookingTime(),
-	                                ticket.getSeatsBooked(),
-	                                ticket.getMealType(),
-	                                ticket.getTotalPrice(),
-	                                ticket.isCanceled(),
+							return new BookingHistoryResponse(ticket.getId(), ticket.getPnr(), ticket.getTripType(),
+									ticket.getBookingTime(), ticket.getSeatsBooked(), ticket.getMealType(),
+									ticket.getTotalPrice(), ticket.isCanceled(),
 
-	                                // flight details
-	                                flight.getAirline(),
-	                                flight.getFromPlace(),
-	                                flight.getToPlace(),
-	                                flight.getDepartureTime(),
-	                                flight.getArrivalTime(),
+									// flight details
+									flight.getAirline(), flight.getFromPlace(), flight.getToPlace(),
+									flight.getDepartureTime(), flight.getArrivalTime(),
 
-	                                // passengers
-	                                passengers
-	                        );
-	                    })
-	            )
-	            .doOnNext(r ->
-	                    System.out.println("✅ History record created for PNR: " + r.getPnr())
-	            )
-	            .doOnError(e ->
-	                    System.err.println("❌ History error: " + e.getMessage())
-	            );
+									// passengers
+									passengers);
+						}))
+				.doOnNext(r -> System.out.println("History record created for PNR: " + r.getPnr()))
+				.doOnError(e -> System.err.println("History error: " + e.getMessage()));
 	}
 
 	@Override
@@ -238,12 +249,8 @@ public class BookingServiceImpl implements BookingService {
 				.flatMap(ticket -> {
 
 					if (ticket.isCanceled()) {
-					    return Mono.error(
-					        new ResponseStatusException(
-					            HttpStatus.BAD_REQUEST,
-					            "Ticket already cancelled"
-					        )
-					    );
+						return Mono
+								.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ticket already cancelled"));
 					}
 
 					int seatCount = (ticket.getSeatsBooked() != null && !ticket.getSeatsBooked().isEmpty())
