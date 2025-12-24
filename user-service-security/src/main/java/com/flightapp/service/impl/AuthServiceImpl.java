@@ -11,6 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.flightapp.exception.BadRequestException;
 import com.flightapp.exception.EmailNotFoundException;
 import com.flightapp.exception.InvalidPasswordException;
 import com.flightapp.model.BlacklistedToken;
@@ -35,10 +36,11 @@ public class AuthServiceImpl implements AuthService {
 	private final TokenBlacklistRepository tokenBlacklistRepository;
 	private final PasswordEncoder passwordEncoder;
 
-	public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, TokenBlacklistRepository tokenBlacklistRepository) {
+	public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder,
+			TokenBlacklistRepository tokenBlacklistRepository) {
 		this.userRepository = userRepository;
 		this.passwordEncoder = passwordEncoder;
-		this.tokenBlacklistRepository=tokenBlacklistRepository;
+		this.tokenBlacklistRepository = tokenBlacklistRepository;
 	}
 
 	@Value("${spring.security.oauth2.resourceserver.jwt.secret}")
@@ -54,83 +56,76 @@ public class AuthServiceImpl implements AuthService {
 					user.setEmail(request.getEmail());
 					user.setPassword(passwordEncoder.encode(request.getPassword()));
 					user.setRole("ADMIN".equalsIgnoreCase(request.getRole()) ? ROLE.ADMIN : ROLE.USER);
-					
-					user.setAge(request.getAge());
-				    user.setGender(request.getGender());
 
-					return userRepository.save(user)
-							.map(saved -> "User registered successfully. ");
+					user.setAge(request.getAge());
+					user.setGender(request.getGender());
+
+					return userRepository.save(user).map(saved -> "User registered successfully. ");
 				}));
 	}
-	
 
 	@Override
 	public Mono<JwtResponse> login(LoginRequest request) {
 
-	    if (request.getEmail() == null || request.getPassword() == null) {
-	        return Mono.error(new RuntimeException("Email and password must not be null"));
-	    }
+		if (request.getEmail() == null || request.getPassword() == null) {
+			return Mono.error(new RuntimeException("Email and password must not be null"));
+		}
 
-	    return userRepository.findByEmail(request.getEmail())
-	        .switchIfEmpty(
-	            Mono.error(new EmailNotFoundException("Email not found"))
-	        )
-	        .flatMap(user -> {
+		return userRepository.findByEmail(request.getEmail())
+				.switchIfEmpty(Mono.error(new EmailNotFoundException("Email not found"))).flatMap(user -> {
 
-	            if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-	                return Mono.error(new InvalidPasswordException("Wrong password"));
-	            }
+					if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+						return Mono.error(new InvalidPasswordException("Wrong password"));
+					}
 
-	            String token = Jwts.builder()
-	                    .setSubject(user.getEmail())
-	                    .claim("roles", List.of(user.getRole().name()))
-	                    .setIssuedAt(new Date())
-	                    .setExpiration(new Date(System.currentTimeMillis() + 3600_000))
-	                    .signWith(
-	                            SignatureAlgorithm.HS256,
-	                            secret.getBytes(StandardCharsets.UTF_8)
-	                    )
-	                    .compact();
+					String token = Jwts.builder().setSubject(user.getEmail())
+							.claim("roles", List.of(user.getRole().name())).setIssuedAt(new Date())
+							.setExpiration(new Date(System.currentTimeMillis() + 3600_000))
+							.signWith(SignatureAlgorithm.HS256, secret.getBytes(StandardCharsets.UTF_8)).compact();
 
-	            return Mono.just(new JwtResponse(token));
-	        });
+					return Mono.just(new JwtResponse(token));
+				});
 	}
-	
+
 	@Override
 	public Mono<String> changePassword(String email, ChangePassword request) {
 
-	    return userRepository.findByEmail(email)
-	            .switchIfEmpty(Mono.error(
-	                new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")
-	            ))
-	            .flatMap(user -> {
+		return userRepository.findByEmail(email)
+				.switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found")))
+				.flatMap(user -> {
 
-	                if (!passwordEncoder.matches(
-	                        request.getOldPassword(), user.getPassword())) {
-	                    return Mono.error(
-	                        new ResponseStatusException(
-	                            HttpStatus.BAD_REQUEST,
-	                            "Old password is incorrect"
-	                        )
-	                    );
-	                }
+					if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+						return Mono.error(new BadRequestException("Old password is incorrect"));
+					}
 
-	                user.setPassword(
-	                        passwordEncoder.encode(request.getNewPassword())
-	                );
-	                return userRepository.save(user);
-	            })
-	            .thenReturn("Password changed successfully");
+					if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+						return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+								"New password must be different from old password"));
+					}
+
+					if (request.getNewPassword().length() < 6) {
+						return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+								"Password must be at least 6 characters long"));
+					}
+
+					String passwordRegex = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&]).{8,}$";
+
+					if (!request.getNewPassword().matches(passwordRegex)) {
+						return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+								"Password must contain uppercase, lowercase, number, and special character"));
+					}
+
+					user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+					return userRepository.save(user);
+				}).thenReturn("Password changed successfully");
 	}
-	
+
 	@Override
 	public Mono<String> logout(String token) {
-	    return tokenBlacklistRepository
-	        .save(new BlacklistedToken(token,
-	                new Date(System.currentTimeMillis() + 3600_000)))
-	        .map(saved -> "Logged out successfully")
-	        .onErrorResume(DuplicateKeyException.class,
-	            ex -> Mono.just("Already logged out"));
+		return tokenBlacklistRepository
+				.save(new BlacklistedToken(token, new Date(System.currentTimeMillis() + 3600_000)))
+				.map(saved -> "Logged out successfully")
+				.onErrorResume(DuplicateKeyException.class, ex -> Mono.just("Already logged out"));
 	}
 
 }
