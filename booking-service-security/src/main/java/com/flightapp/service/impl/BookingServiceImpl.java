@@ -238,7 +238,12 @@ public class BookingServiceImpl implements BookingService {
 				.flatMap(ticket -> {
 
 					if (ticket.isCanceled()) {
-						return Mono.just("Ticket already cancelled");
+					    return Mono.error(
+					        new ResponseStatusException(
+					            HttpStatus.BAD_REQUEST,
+					            "Ticket already cancelled"
+					        )
+					    );
 					}
 
 					int seatCount = (ticket.getSeatsBooked() != null && !ticket.getSeatsBooked().isEmpty())
