@@ -11,6 +11,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.flightapp.exception.EmailNotFoundException;
+import com.flightapp.exception.InvalidPasswordException;
 import com.flightapp.model.BlacklistedToken;
 import com.flightapp.model.ChangePassword;
 import com.flightapp.model.ROLE;
@@ -70,39 +72,27 @@ public class AuthServiceImpl implements AuthService {
 	    }
 
 	    return userRepository.findByEmail(request.getEmail())
-	        .switchIfEmpty(Mono.error(new RuntimeException("User not found")))
+	        .switchIfEmpty(
+	            Mono.error(new EmailNotFoundException("Email not found"))
+	        )
 	        .flatMap(user -> {
 
 	            if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-	                return Mono.error(new RuntimeException("Invalid password"));
+	                return Mono.error(new InvalidPasswordException("Wrong password"));
 	            }
 
-	            if (secret == null || secret.isEmpty()) {
-	                return Mono.error(new RuntimeException("JWT secret is not configured"));
-	            }
+	            String token = Jwts.builder()
+	                    .setSubject(user.getEmail())
+	                    .claim("roles", List.of(user.getRole().name()))
+	                    .setIssuedAt(new Date())
+	                    .setExpiration(new Date(System.currentTimeMillis() + 3600_000))
+	                    .signWith(
+	                            SignatureAlgorithm.HS256,
+	                            secret.getBytes(StandardCharsets.UTF_8)
+	                    )
+	                    .compact();
 
-	            try {
-	                String token = Jwts.builder()
-	                        .setSubject(user.getEmail())               
-//	                        .claim("role", user.getRole().name())
-	                        .claim("roles", List.of(user.getRole().name()))
-	                        .setIssuedAt(new Date())
-	                        .setExpiration(
-	                                new Date(System.currentTimeMillis() + 3600_000) // 1 hour
-	                        )
-	                        .signWith(
-	                                SignatureAlgorithm.HS256,
-	                                secret.getBytes(StandardCharsets.UTF_8)
-	                        )
-	                        .compact();
-
-	                return Mono.just(new JwtResponse(token));
-
-	            } catch (Exception e) {
-	                return Mono.error(
-	                        new RuntimeException("Failed to generate JWT: " + e.getMessage(), e)
-	                );
-	            }
+	            return Mono.just(new JwtResponse(token));
 	        });
 	}
 	

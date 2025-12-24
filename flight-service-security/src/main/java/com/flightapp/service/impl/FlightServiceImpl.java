@@ -2,10 +2,9 @@ package com.flightapp.service.impl;
 
 import java.time.LocalDateTime;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
+import com.flightapp.exception.InvalidFlightException;
 import com.flightapp.model.Flight;
 import com.flightapp.repository.FlightRepository;
 import com.flightapp.service.FlightService;
@@ -28,23 +27,69 @@ public class FlightServiceImpl implements FlightService {
 
 	@Override
 	public Mono<Flight> addFlight(Flight flight) {
-		return flightRepository.findByAirlineAndFromPlaceAndToPlaceAndDepartureTime(flight.getAirline(),
-				flight.getFromPlace(), flight.getToPlace(), flight.getDepartureTime()).hasElement().flatMap(exists -> {
-					if (exists) {
-						return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, "Flight already exists"));
-					}
-					if (flight.getDepartureTime().isBefore(LocalDateTime.now())) {
-						return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
-								"Departure time cannot be in the past"));
-					}
-					if (flight.getTotalSeats() <= 0) {
-						return Mono.error(
-								new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seats must be greater than zero"));
-					}
-					return flightRepository.save(flight);
-				}).onErrorMap(e -> {
-					return e;
-				});
+
+	    return flightRepository
+	        .findByAirlineAndFromPlaceAndToPlaceAndDepartureTime(
+	            flight.getAirline(),
+	            flight.getFromPlace(),
+	            flight.getToPlace(),
+	            flight.getDepartureTime()
+	        )
+	        .hasElement()
+	        .flatMap(exists -> {
+
+	            if (exists) {
+	                return Mono.error(new InvalidFlightException("Flight already exists"));
+	            }
+
+	            if (flight.getFromPlace().equalsIgnoreCase(flight.getToPlace())) {
+	                return Mono.error(new InvalidFlightException(
+	                    "From and To locations cannot be the same"
+	                ));
+	            }
+
+	            if (flight.getDepartureTime().isBefore(LocalDateTime.now())) {
+	                return Mono.error(new InvalidFlightException(
+	                    "Departure must be in the future"
+	                ));
+	            }
+
+	            if (flight.getArrivalTime().isBefore(flight.getDepartureTime())) {
+	                return Mono.error(new InvalidFlightException(
+	                    "Arrival time must be after departure time"
+	                ));
+	            }
+
+	            if (flight.getTotalSeats() <= 0) {
+	                return Mono.error(new InvalidFlightException(
+	                    "Total seats must be greater than zero"
+	                ));
+	            }
+
+	            if (flight.getAvailableSeats() < 0) {
+	                return Mono.error(new InvalidFlightException(
+	                    "Available seats cannot be negative"
+	                ));
+	            }
+
+	            if (flight.getAvailableSeats() > flight.getTotalSeats()) {
+	                return Mono.error(new InvalidFlightException(
+	                    "Available seats cannot exceed total seats"
+	                ));
+	            }
+
+	            if (flight.getPrice() <= 0) {
+	                return Mono.error(new InvalidFlightException(
+	                    "Price must be greater than zero"
+	                ));
+	            }
+
+	            flight.setAirline(flight.getAirline().trim());
+	            flight.setFromPlace(flight.getFromPlace().trim());
+	            flight.setToPlace(flight.getToPlace().trim());
+
+	            return flightRepository.save(flight);
+	        });
 	}
 
 	@Override

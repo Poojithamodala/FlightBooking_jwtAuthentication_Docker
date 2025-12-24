@@ -1,5 +1,6 @@
 package com.flightapp;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
@@ -7,6 +8,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.flightapp.exception.InvalidFlightException;
 
 import reactor.core.publisher.Mono;
 
@@ -42,6 +45,19 @@ public class GlobalExceptionHandler {
         return Mono.just(
                 ResponseEntity.badRequest().body(errors)
         );
+    }
+    
+    @ExceptionHandler(InvalidFlightException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidFlight(
+            InvalidFlightException ex) {
+
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(Map.of(
+                "timestamp", LocalDateTime.now(),
+                "status", 400,
+                "message", ex.getMessage()
+            ));
     }
 
     
