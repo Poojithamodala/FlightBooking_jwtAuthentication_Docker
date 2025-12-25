@@ -1,6 +1,8 @@
 package com.flightapp.service.impl;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.List;
 
@@ -45,6 +47,8 @@ public class AuthServiceImpl implements AuthService {
 
 	@Value("${spring.security.oauth2.resourceserver.jwt.secret}")
 	private String secret;
+	
+	private static final long PASSWORD_EXPIRY_DAYS = 90;
 
 	@Override
 	public Mono<String> register(SignUpRequest request) {
@@ -55,6 +59,8 @@ public class AuthServiceImpl implements AuthService {
 					user.setUsername(request.getUsername());
 					user.setEmail(request.getEmail());
 					user.setPassword(passwordEncoder.encode(request.getPassword()));
+					user.setPasswordLastChangedAt(LocalDateTime.now());
+					user.setForcePasswordChange(false);
 					user.setRole("ADMIN".equalsIgnoreCase(request.getRole()) ? ROLE.ADMIN : ROLE.USER);
 
 					user.setAge(request.getAge());
@@ -78,12 +84,36 @@ public class AuthServiceImpl implements AuthService {
 						return Mono.error(new InvalidPasswordException("Wrong password"));
 					}
 
-					String token = Jwts.builder().setSubject(user.getEmail())
-							.claim("roles", List.of(user.getRole().name())).setIssuedAt(new Date())
-							.setExpiration(new Date(System.currentTimeMillis() + 3600_000))
-							.signWith(SignatureAlgorithm.HS256, secret.getBytes(StandardCharsets.UTF_8)).compact();
+					boolean forceChange = false;
 
-					return Mono.just(new JwtResponse(token));
+		            if (user.getPasswordLastChangedAt() == null) {
+		                forceChange = true;
+		            } else {
+		                long days = ChronoUnit.DAYS.between(
+		                    user.getPasswordLastChangedAt(),
+		                    LocalDateTime.now()
+		                );
+		                if (days >= 90) {
+		                    forceChange = true;
+		                }
+		            }
+
+		            user.setForcePasswordChange(forceChange);
+
+		            return userRepository.save(user)
+		                .map(savedUser -> {
+
+		                    String token = Jwts.builder()
+		                        .setSubject(savedUser.getEmail())
+		                        .claim("roles", List.of(savedUser.getRole().name()))
+		                        // ✅ ADD THIS CLAIM
+		                        .claim("forcePasswordChange", savedUser.isForcePasswordChange())
+		                        .setIssuedAt(new Date())
+		                        .setExpiration(new Date(System.currentTimeMillis() + 3600_000))
+		                        .signWith(SignatureAlgorithm.HS256, secret.getBytes(StandardCharsets.UTF_8))
+		                        .compact();
+
+		                    return new JwtResponse(token);});
 				});
 	}
 
@@ -116,6 +146,8 @@ public class AuthServiceImpl implements AuthService {
 					}
 
 					user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+					user.setPasswordLastChangedAt(LocalDateTime.now());
+		            user.setForcePasswordChange(false);
 					return userRepository.save(user);
 				}).thenReturn("Password changed successfully");
 	}

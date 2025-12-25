@@ -41,8 +41,26 @@ public class SecurityConfig {
                 .pathMatchers(HttpMethod.POST, "/auth/logout").permitAll()
                 .pathMatchers(HttpMethod.GET, "/auth/token/blacklisted").permitAll()
 
-                .anyExchange().authenticated()
+                .anyExchange().access((authentication, context) ->
+                authentication.map(auth -> {
+
+                    // If JWT exists, check claim
+                    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+
+                        Boolean forceChange =
+                            jwtAuth.getToken().getClaim("forcePasswordChange");
+
+                        // ❌ Block everything except changepassword
+                        if (Boolean.TRUE.equals(forceChange)) {
+                            return new org.springframework.security.authorization.AuthorizationDecision(false);
+                        }
+                    }
+
+                    // ✅ Allow normal access
+                    return new org.springframework.security.authorization.AuthorizationDecision(true);
+                })
             )
+        )
             .oauth2ResourceServer(oauth2 -> oauth2.jwt())
             .build();
     }
