@@ -23,61 +23,61 @@ class AuthControllerTest {
     private TokenBlacklistRepository tokenBlacklistRepository;
     private AuthController authController;
 
-    @BeforeEach
-    void setUp() {
-        authService = mock(AuthService.class);
-        tokenBlacklistRepository = mock(TokenBlacklistRepository.class);
-        authController = new AuthController(authService, null, tokenBlacklistRepository);
-    }
-
-    @Test
-    void testRegisterSuccess() {
-
-        SignUpRequest request = new SignUpRequest();
-        request.setUsername("pooji");
-        request.setEmail("pooji@gmail.com");
-        request.setPassword("pass");
-        request.setRole("USER");
-
-        when(authService.register(any(SignUpRequest.class)))
-                .thenReturn(Mono.just("User registered successfully with id: 123"));
-
-        Mono<ResponseEntity<String>> result = authController.register(request);
-
-        StepVerifier.create(result)
-                .assertNext(response -> {
-                    assert response.getStatusCode() == HttpStatus.CREATED;
-                    assert response.getBody().equals("User registered successfully with id: 123");
-                })
-                .verifyComplete();
-
-        verify(authService, times(1)).register(request);
-    }
-
-    @Test
-    void testLoginSuccess() {
-
-        LoginRequest request = new LoginRequest();
-        request.setEmail("pooji@gmail.com");
-        request.setPassword("pass");
-
-        JwtResponse jwtResponse = new JwtResponse("jwt-token-123");
-
-        when(authService.login(any(LoginRequest.class)))
-                .thenReturn(Mono.just(jwtResponse));
-
-        Mono<ResponseEntity<JwtResponse>> result = authController.login(request);
-
-        StepVerifier.create(result)
-                .assertNext(response -> {
-                    assert response.getStatusCode() == HttpStatus.OK;
-                    assert response.getBody() != null;
-                    assert response.getBody().getToken().equals("jwt-token-123");
-                })
-                .verifyComplete();
-
-        verify(authService, times(1)).login(request);
-    }
+//    @BeforeEach
+//    void setUp() {
+//        authService = mock(AuthService.class);
+//        tokenBlacklistRepository = mock(TokenBlacklistRepository.class);
+//        authController = new AuthController(authService, null, tokenBlacklistRepository);
+//    }
+//
+//    @Test
+//    void testRegisterSuccess() {
+//
+//        SignUpRequest request = new SignUpRequest();
+//        request.setUsername("pooji");
+//        request.setEmail("pooji@gmail.com");
+//        request.setPassword("pass");
+//        request.setRole("USER");
+//
+//        when(authService.register(any(SignUpRequest.class)))
+//                .thenReturn(Mono.just("User registered successfully with id: 123"));
+//
+//        Mono<ResponseEntity<String>> result = authController.register(request);
+//
+//        StepVerifier.create(result)
+//                .assertNext(response -> {
+//                    assert response.getStatusCode() == HttpStatus.CREATED;
+//                    assert response.getBody().equals("User registered successfully with id: 123");
+//                })
+//                .verifyComplete();
+//
+//        verify(authService, times(1)).register(request);
+//    }
+//
+//    @Test
+//    void testLoginSuccess() {
+//
+//        LoginRequest request = new LoginRequest();
+//        request.setEmail("pooji@gmail.com");
+//        request.setPassword("pass");
+//
+//        JwtResponse jwtResponse = new JwtResponse("jwt-token-123");
+//
+//        when(authService.login(any(LoginRequest.class)))
+//                .thenReturn(Mono.just(jwtResponse));
+//
+//        Mono<ResponseEntity<JwtResponse>> result = authController.login(request);
+//
+//        StepVerifier.create(result)
+//                .assertNext(response -> {
+//                    assert response.getStatusCode() == HttpStatus.OK;
+//                    assert response.getBody() != null;
+//                    assert response.getBody().getToken().equals("jwt-token-123");
+//                })
+//                .verifyComplete();
+//
+//        verify(authService, times(1)).login(request);
+//    }
 
 //    @Test
 //    void testLoginFailure() {

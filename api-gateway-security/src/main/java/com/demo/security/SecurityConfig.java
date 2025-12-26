@@ -43,12 +43,13 @@ public class SecurityConfig {
 
                         .pathMatchers(HttpMethod.POST, "/user-service/auth/register").permitAll()
                         .pathMatchers(HttpMethod.POST, "/user-service/auth/login").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/user-service/auth/forgot-password").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/user-service/auth/reset-password").permitAll()
                         .pathMatchers(HttpMethod.PUT, "/user-service/auth/changepassword").authenticated()
                         
                         .pathMatchers(HttpMethod.POST, "/user-service/auth/logout").authenticated()
                         .pathMatchers(HttpMethod.GET, "/user-service/auth/token/blacklisted").permitAll()
                         .pathMatchers(HttpMethod.GET, "/user-service/auth/profile").authenticated()
-                 
                         
                         .pathMatchers(HttpMethod.GET, "/flight-service/api/flight/allflights").hasRole("ADMIN")
                         .pathMatchers("/flight-service/api/flight/airline/inventory/add").hasRole("ADMIN")

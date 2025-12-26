@@ -77,18 +77,14 @@ public class JwtBlacklistWebFilter implements WebFilter {
 
         if (path.startsWith("/user-service/auth/login")
                 || path.startsWith("/user-service/auth/register")
+                || path.startsWith("/user-service/auth/forgot-password")
+                || path.startsWith("/user-service/auth/reset-password")
                 || path.startsWith("/user-service/auth/token/blacklisted")
                 || path.startsWith("/flight-service/api/flight/search/airline")) {
 
             return chain.filter(exchange);
         }
-//        if (path.contains("/auth/login")
-//                || path.contains("/auth/register")
-//                || path.contains("/auth/logout")
-//                || path.contains("/auth/token/blacklisted")) {
-//            return chain.filter(exchange);
-//        }
-
+        
         String authHeader = exchange.getRequest()
                 .getHeaders()
                 .getFirst(HttpHeaders.AUTHORIZATION);
