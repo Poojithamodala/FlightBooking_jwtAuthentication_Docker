@@ -1,5 +1,7 @@
 package com.flightapp.service.impl;
 
+//import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.log;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -33,10 +35,12 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BookingServiceImpl implements BookingService {
@@ -94,26 +98,7 @@ public class BookingServiceImpl implements BookingService {
 		if (seats.size() != passengers.size()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate seat numbers are not allowed");
 		}
-//		return Mono.fromCallable(() -> {
-//			FlightDto depFlight = getFlightOrThrow(departureFlightId, seatCount, "Departure", token);
-//
-//			FlightDto retFlight = getReturnFlightIfNeeded(returnFlightId, tripType, seatCount, token);
-//
-//			reserveFlights(retFlight, departureFlightId, returnFlightId, seatCount, token);
-//
-//			return new CheckedFlights(depFlight, retFlight);
-//		}).subscribeOn(Schedulers.boundedElastic())
-//				.flatMap(checked -> createTicket(userEmail, departureFlightId, returnFlightId, passengers, tripType,
-//						checked.dep(), checked.ret()))
-//				.onErrorResume(ex -> {
-//				    if (ex instanceof ResponseStatusException) {
-//				        return Mono.error(ex); // propagate
-//				    } else {
-//				        return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex));
-//				    }
-//				});
-//
-//	}
+		
 		Mono<Void> seatAvailabilityCheck = Flux.fromIterable(passengers).flatMap(p -> passengerRepository
 				.existsByFlightIdAndSeatNumber(departureFlightId, p.getSeatNumber()).flatMap(exists -> {
 					if (exists) {
@@ -197,22 +182,19 @@ public class BookingServiceImpl implements BookingService {
 				        )
 				    )
 				    .then(Mono.just(saved));
-		}).doOnSuccess(saved -> sendEvent("BOOKING_CONFIRMED", saved)).map(Ticket::getPnr);
+		}).doOnSuccess(saved -> {
+		    Mono.fromRunnable(() -> sendEvent("BOOKING_CONFIRMED", saved))
+	        .subscribeOn(Schedulers.boundedElastic())
+	        .subscribe();
+	})
+	.map(Ticket::getPnr);
 	}
 
 	@Override
 	public Mono<Ticket> getByPnr(String pnr) {
 		return ticketRepository.findByPnr(pnr);
 	}
-
-//	@Override
-//	public Flux<Ticket> history(Authentication authentication) {
-//
-//	    JwtAuthenticationToken jwtAuth = (JwtAuthenticationToken) authentication;
-//	    Jwt jwt = jwtAuth.getToken();
-//	    String email = jwt.getSubject();
-//	    return ticketRepository.findByUserEmail(email);
-//	}
+	
 	@Override
 	public Flux<BookingHistoryResponse> historyByEmail(String email, String token) {
 
@@ -294,11 +276,27 @@ public class BookingServiceImpl implements BookingService {
 	private void sendEvent(String eventType, Ticket ticket) {
 		BookingEvent event = BookingEvent.builder().eventType(eventType).pnr(ticket.getPnr())
 				.userEmail(ticket.getUserEmail()).totalPrice(ticket.getTotalPrice()).build();
+//		try {
+//			kafkaTemplate.send(TOPIC, ticket.getPnr(), event);
+//		} catch (Exception ex) {
+//			// log
+//		}
 		try {
-			kafkaTemplate.send(TOPIC, ticket.getPnr(), event);
-		} catch (Exception ex) {
-			// log
-		}
+	        kafkaTemplate.send(TOPIC, ticket.getPnr(),
+	                BookingEvent.builder()
+	                        .eventType(eventType)
+	                        .pnr(ticket.getPnr())
+	                        .userEmail(ticket.getUserEmail())
+	                        .totalPrice(ticket.getTotalPrice())
+	                        .build()
+	        ).whenComplete((res, ex) -> {
+	            if (ex != null) {
+	                log.error("Kafka failed, booking still successful", ex);
+	            }
+	        });
+	    } catch (Exception e) {
+	        log.error("Kafka producer error", e);
+	    }
 	}
 
 	private record CheckedFlights(FlightDto dep, FlightDto ret) {
