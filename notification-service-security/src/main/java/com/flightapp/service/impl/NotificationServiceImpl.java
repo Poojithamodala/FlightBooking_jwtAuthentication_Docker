@@ -8,6 +8,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 import com.flightapp.messaging.BookingEvent;
+import com.flightapp.messaging.PasswordResetEvent;
 import com.flightapp.service.NotificationService;
 
 import lombok.RequiredArgsConstructor;
@@ -21,7 +22,7 @@ public class NotificationServiceImpl implements NotificationService {
 	private final JavaMailSender mailSender;
 
 	@Override
-	@KafkaListener(topics = "booking-events", groupId = "notification-service", containerFactory = "bookingEventKafkaListenerContainerFactory")
+	@KafkaListener(topics = "booking-events")
 	public void handleBookingEvent(BookingEvent event) {
 		log.info("Received booking event: {}", event);
 
@@ -45,9 +46,11 @@ public class NotificationServiceImpl implements NotificationService {
 			body = "Update for booking PNR: " + event.getPnr();
 			break;
 		}
+		log.info("Sending email to {}", event.getUserEmail());
 
 		try {
 			SimpleMailMessage message = new SimpleMailMessage();
+			message.setFrom("poojithamodala26@gmail.com");
 			message.setTo(event.getUserEmail());
 			message.setSubject(subject);
 			message.setText(body);
@@ -56,4 +59,25 @@ public class NotificationServiceImpl implements NotificationService {
 			log.error("Failed to send email", e);
 		}
 	}
+	
+	@Override
+    @KafkaListener(topics = "password-reset-events")
+    public void handlePasswordReset(PasswordResetEvent event) {
+
+        String resetLink = "http://localhost:4200/reset-password?token=" + event.getToken();
+        String subject = "Reset your password";
+        String body = "Click the link below to reset your password:\n\n"
+                    + resetLink + "\n\nThis link is valid for 15 minutes.";
+
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom("poojithamodala26@gmail.com");
+            message.setTo(event.getEmail());
+            message.setSubject(subject);
+            message.setText(body);
+            mailSender.send(message);
+        } catch (Exception e) {
+            log.error("Failed to send password reset email to {}", event.getEmail(), e);
+        }
+    }
 }

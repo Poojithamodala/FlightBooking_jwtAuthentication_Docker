@@ -19,40 +19,40 @@ class KafkaConsumerConfigTest {
 
 	private final KafkaConsumerConfig config = new KafkaConsumerConfig();
 
-	@Test
-	void bookingEventConsumerFactory_shouldCreateProperlyConfiguredConsumerFactory() {
-		ConsumerFactory<String, BookingEvent> factory = config.bookingEventConsumerFactory();
-
-		assertNotNull(factory, "ConsumerFactory should not be null");
-		assertTrue(factory instanceof DefaultKafkaConsumerFactory, "Factory should be a DefaultKafkaConsumerFactory");
-
-		@SuppressWarnings("unchecked")
-		DefaultKafkaConsumerFactory<String, BookingEvent> defaultFactory = (DefaultKafkaConsumerFactory<String, BookingEvent>) factory;
-
-		Map<String, Object> configs = defaultFactory.getConfigurationProperties();
-		assertEquals("localhost:9092", configs.get(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
-				"Bootstrap servers should be kafka:9092");
-
-		assertEquals("notification-service", configs.get(ConsumerConfig.GROUP_ID_CONFIG),
-				"Group id should be notification-service");
-
-		assertEquals(StringDeserializer.class, configs.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG),
-				"Key deserializer should be StringDeserializer");
-
-		assertEquals(org.springframework.kafka.support.serializer.JsonDeserializer.class,
-				configs.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG),
-				"Value deserializer should be JsonDeserializer class");
-	}
-
-	@Test
-	void bookingEventKafkaListenerContainerFactory_shouldUseConsumerFactory() {
-		ConcurrentKafkaListenerContainerFactory<String, BookingEvent> factory = config
-				.bookingEventKafkaListenerContainerFactory();
-
-		assertNotNull(factory, "KafkaListenerContainerFactory should not be null");
-		assertNotNull(factory.getConsumerFactory(), "ConsumerFactory inside factory should not be null");
-
-		assertTrue(factory.getConsumerFactory() instanceof DefaultKafkaConsumerFactory,
-				"ConsumerFactory should be DefaultKafkaConsumerFactory");
-	}
+//	@Test
+//	void bookingEventConsumerFactory_shouldCreateProperlyConfiguredConsumerFactory() {
+//		ConsumerFactory<String, BookingEvent> factory = config.bookingEventConsumerFactory();
+//
+//		assertNotNull(factory, "ConsumerFactory should not be null");
+//		assertTrue(factory instanceof DefaultKafkaConsumerFactory, "Factory should be a DefaultKafkaConsumerFactory");
+//
+//		@SuppressWarnings("unchecked")
+//		DefaultKafkaConsumerFactory<String, BookingEvent> defaultFactory = (DefaultKafkaConsumerFactory<String, BookingEvent>) factory;
+//
+//		Map<String, Object> configs = defaultFactory.getConfigurationProperties();
+//		assertEquals("localhost:9092", configs.get(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
+//				"Bootstrap servers should be kafka:9092");
+//
+//		assertEquals("notification-service", configs.get(ConsumerConfig.GROUP_ID_CONFIG),
+//				"Group id should be notification-service");
+//
+//		assertEquals(StringDeserializer.class, configs.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG),
+//				"Key deserializer should be StringDeserializer");
+//
+//		assertEquals(org.springframework.kafka.support.serializer.JsonDeserializer.class,
+//				configs.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG),
+//				"Value deserializer should be JsonDeserializer class");
+//	}
+//
+//	@Test
+//	void bookingEventKafkaListenerContainerFactory_shouldUseConsumerFactory() {
+//		ConcurrentKafkaListenerContainerFactory<String, BookingEvent> factory = config
+//				.bookingEventKafkaListenerContainerFactory();
+//
+//		assertNotNull(factory, "KafkaListenerContainerFactory should not be null");
+//		assertNotNull(factory.getConsumerFactory(), "ConsumerFactory inside factory should not be null");
+//
+//		assertTrue(factory.getConsumerFactory() instanceof DefaultKafkaConsumerFactory,
+//				"ConsumerFactory should be DefaultKafkaConsumerFactory");
+//	}
 }

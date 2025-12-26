@@ -5,6 +5,7 @@ import java.util.Map;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
@@ -16,25 +17,57 @@ import com.flightapp.messaging.BookingEvent;
 
 @Configuration
 public class KafkaConsumerConfig {
+	
+	@Value("${spring.kafka.bootstrap-servers}")
+    private String bootstrapServers;
 
+//	@Bean
+//	public ConsumerFactory<String, BookingEvent> bookingEventConsumerFactory() {
+//		JsonDeserializer<BookingEvent> deserializer = new JsonDeserializer<>(BookingEvent.class);
+//		deserializer.addTrustedPackages("*");
+//
+//		Map<String, Object> config = new HashMap<>();
+//		config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+//		config.put(ConsumerConfig.GROUP_ID_CONFIG, "notification-service");
+//		config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+//		config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, deserializer.getClass());
+//
+//		return new DefaultKafkaConsumerFactory<>(config, new StringDeserializer(), deserializer);
+//	}
+//
+//	@Bean
+//	public ConcurrentKafkaListenerContainerFactory<String, BookingEvent> bookingEventKafkaListenerContainerFactory() {
+//		ConcurrentKafkaListenerContainerFactory<String, BookingEvent> factory = new ConcurrentKafkaListenerContainerFactory<>();
+//		factory.setConsumerFactory(bookingEventConsumerFactory());
+//		return factory;
+//	}
 	@Bean
-	public ConsumerFactory<String, BookingEvent> bookingEventConsumerFactory() {
-		JsonDeserializer<BookingEvent> deserializer = new JsonDeserializer<>(BookingEvent.class);
-		deserializer.addTrustedPackages("*");
+	public ConsumerFactory<String, Object> consumerFactory() {
 
-		Map<String, Object> config = new HashMap<>();
-		config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-		config.put(ConsumerConfig.GROUP_ID_CONFIG, "notification-service");
-		config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+	    JsonDeserializer<Object> deserializer = new JsonDeserializer<>();
+	    deserializer.addTrustedPackages("*");
+
+	    Map<String, Object> config = new HashMap<>();
+	    config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+	    config.put(ConsumerConfig.GROUP_ID_CONFIG, "notification-service");
+	    config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 		config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, deserializer.getClass());
 
-		return new DefaultKafkaConsumerFactory<>(config, new StringDeserializer(), deserializer);
+	    return new DefaultKafkaConsumerFactory<>(
+	        config,
+	        new StringDeserializer(),
+	        deserializer
+	    );
 	}
 
 	@Bean
-	public ConcurrentKafkaListenerContainerFactory<String, BookingEvent> bookingEventKafkaListenerContainerFactory() {
-		ConcurrentKafkaListenerContainerFactory<String, BookingEvent> factory = new ConcurrentKafkaListenerContainerFactory<>();
-		factory.setConsumerFactory(bookingEventConsumerFactory());
-		return factory;
+	public ConcurrentKafkaListenerContainerFactory<String, Object>
+	kafkaListenerContainerFactory() {
+
+	    ConcurrentKafkaListenerContainerFactory<String, Object> factory =
+	        new ConcurrentKafkaListenerContainerFactory<>();
+
+	    factory.setConsumerFactory(consumerFactory());
+	    return factory;
 	}
 }
