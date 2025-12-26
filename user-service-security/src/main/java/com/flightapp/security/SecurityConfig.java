@@ -36,6 +36,8 @@ public class SecurityConfig {
                 .pathMatchers("/actuator/**").permitAll()
                 .pathMatchers(HttpMethod.POST, "/auth/register").permitAll()
                 .pathMatchers(HttpMethod.POST, "/auth/login").permitAll()
+                .pathMatchers(HttpMethod.POST, "/auth/forgot-password").permitAll()
+                .pathMatchers(HttpMethod.POST, "/auth/reset-password").permitAll()
                 .pathMatchers(HttpMethod.GET, "/auth/profile").authenticated()
                 .pathMatchers(HttpMethod.PUT, "/auth/changepassword").authenticated()
                 .pathMatchers(HttpMethod.POST, "/auth/logout").permitAll()
@@ -43,20 +45,14 @@ public class SecurityConfig {
 
                 .anyExchange().access((authentication, context) ->
                 authentication.map(auth -> {
-
-                    // If JWT exists, check claim
                     if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
 
                         Boolean forceChange =
                             jwtAuth.getToken().getClaim("forcePasswordChange");
-
-                        // ❌ Block everything except changepassword
                         if (Boolean.TRUE.equals(forceChange)) {
                             return new org.springframework.security.authorization.AuthorizationDecision(false);
                         }
                     }
-
-                    // ✅ Allow normal access
                     return new org.springframework.security.authorization.AuthorizationDecision(true);
                 })
             )
