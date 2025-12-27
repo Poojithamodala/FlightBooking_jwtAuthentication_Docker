@@ -64,11 +64,11 @@ public class BookingController {
 //	public Flux<Ticket> history(Authentication authentication) {
 //	    return bookingService.history(authentication);
 //	}
-	
+
 	@GetMapping("/booking/history")
 	public Flux<BookingHistoryResponse> myHistory(JwtAuthenticationToken auth) {
-	    String email = auth.getToken().getSubject();
-	    return bookingService.historyByEmail(email, auth.getToken().getTokenValue());
+		String email = auth.getToken().getSubject();
+		return bookingService.historyByEmail(email, auth.getToken().getTokenValue());
 	}
 
 	@DeleteMapping("/booking/cancel/{pnr}")
